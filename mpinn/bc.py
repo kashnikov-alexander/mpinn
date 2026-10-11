@@ -6,112 +6,65 @@ import jax
 import jax.numpy as jnp
 
 
-@jax.jit
-def dirichlet_bc(model, points, values):
-    """
-    Вычисляет невязки граничного условия Дирихле.
+def _broadcast(value, like):
+    """Скаляр или массив -> массив формы like."""
+    if jnp.ndim(value) == 0:
+        return jnp.full_like(like, value)
+    return jnp.ravel(value)
 
-    Parameters
-    ----------
-    model : nnx.Module
-        Нейронная сеть.
-    points : jax.Array
-        Координаты граничных точек формы (n_points, D).
-    values : float | jax.Array
-        Заданное значение температуры на границе.
 
-    Returns
-    -------
-    jax.Array
-        Массив невязок формы (n_points,).
-    """
+def _normal_derivative(model, points, normals):
+    """dT/dn в точках. model ожидает (N, D) -> (N,)."""
+    def grad_one(x):
+        return jax.grad(lambda y: model(y[None]).ravel()[0])(x)
+
+    grads = jax.vmap(grad_one)(points)
+    return jnp.sum(grads * normals, axis=1)
+
+
+def _lambda_vals(model, points, lam):
+    """lam -> массив значений в точках. Поддерживает скаляр, массив, callable(T)."""
+    if callable(lam):
+        T_vals = model(points).ravel()
+        return jax.vmap(lam)(T_vals)
+    return lam * jnp.ones((points.shape[0],))
+
+
+def dirichlet_bc(model, points, T_bc):
+    """T = T_bc на границе."""
     T_pred = model(points).ravel()
-    # Приводим values к той же форме, что и T_pred
-    if jnp.ndim(values) == 0:
-        values = jnp.full_like(T_pred, values)
-    else:
-        values = jnp.ravel(values)
-    return T_pred - values
+    return T_pred - _broadcast(T_bc, T_pred)
 
 
-@jax.jit
-def neumann_bc(model, points, normals, flux_values):
+def neumann_bc(model, points, normals, q, lam=1.0):
     """
-    Вычисляет невязки граничного условия Неймана.
-
-    Parameters
-    ----------
-    model : nnx.Module
-        Нейронная сеть.
-    points : jax.Array
-        Координаты граничных точек формы (n_points, D).
-    normals : jax.Array
-        Единичные нормали формы (n_points, D).
-    flux_values : float | jax.Array
-        Заданное значение потока на границе.
-
-    Returns
-    -------
-    jax.Array
-        Массив невязок формы (n_points,).
+    Закон Фурье: -lam * dT/dn = q.
+    q    — тепловой поток вдоль ВНЕШНЕЙ нормали
+    lam  — теплопроводность (скаляр, массив или callable(T))
     """
-    def predict(x):
-        return model(jnp.atleast_2d(x)).ravel()[0]
-
-    def grad_predict(x):
-        return jax.grad(predict)(x)
-
-    grads = jax.vmap(grad_predict)(points)
-    normal_deriv = jnp.sum(grads * normals, axis=1)  # (n_points,)
-    
-    # Приводим flux_values к той же форме
-    if jnp.ndim(flux_values) == 0:
-        flux_values = jnp.full_like(normal_deriv, flux_values)
-    else:
-        flux_values = jnp.ravel(flux_values)
-    
-    return normal_deriv - flux_values
+    lam_vals = _lambda_vals(model, points, lam)
+    dT_dn = _normal_derivative(model, points, normals)
+    return -lam_vals * dT_dn - _broadcast(q, dT_dn)
 
 
-@jax.jit
-def robin_bc(model, points, normals, alpha, beta, values):
+def robin_bc(model, points, normals, h, T_inf, lam=1.0):
     """
-    Вычисляет невязки граничного условия Робина.
+    Конвективный теплообмен:
+        h * (T - T_inf) + lam * dT/dn = 0
 
-    Parameters
-    ----------
-    model : nnx.Module
-        Нейронная сеть.
-    points : jax.Array
-        Координаты граничных точек формы (n_points, D).
-    normals : jax.Array
-        Единичные нормали формы (n_points, D).
-    alpha : float
-        Коэффициент при температуре.
-    beta : float
-        Коэффициент при градиенте температуры.
-    values : float | jax.Array
-        Заданное значение комбинации.
-
-    Returns
-    -------
-    jax.Array
-        Массив невязок формы (n_points,).
+    h     — коэффициент теплоотдачи
+    T_inf — температура внешней среды
+    lam   — теплопроводность (скаляр, массив или callable(T))
     """
-    def predict(x):
-        return model(jnp.atleast_2d(x)).ravel()[0]
+    T_vals = model(points).ravel()
+    lam_vals = _lambda_vals(model, points, lam)
+    dT_dn = _normal_derivative(model, points, normals)
+    return h * (T_vals - _broadcast(T_inf, T_vals)) + lam_vals * dT_dn
 
-    def grad_predict(x):
-        return jax.grad(predict)(x)
 
-    grads = jax.vmap(grad_predict)(points)
-    T_vals = jax.vmap(predict)(points)
-    normal_deriv = jnp.sum(grads * normals, axis=1)  # (n_points,)
-
-    # Приводим values к той же форме
-    if jnp.ndim(values) == 0:
-        values = jnp.full_like(T_vals, values)
-    else:
-        values = jnp.ravel(values)
-
-    return alpha * T_vals + beta * normal_deriv - values
+def adiabatic_bc(model, points, normals):
+    """
+    Адиабатическая граница: dT/dn = 0.
+    Эквивалентно neumann_bc с q=0, но без параметра lam.
+    """
+    return _normal_derivative(model, points, normals)
