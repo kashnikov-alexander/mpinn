@@ -87,38 +87,43 @@ def interface_loss(model_i, model_j, pts, n1, n2, lam_i, lam_j):
 
 
 def mpinn_loss_fn(mpinn, x_collocations, *,
-                  pde_weight=1.0, bc_weight=1.0, interface_weight=1.0,
+                  pde_weight=1.0, bc_weight=1.0, if_weight=1.0,
                   source_fns=()):
     """
-    Полный лосс MPINN. Веса — аргументы (можно подменять разные loss_fn).
-    Returns (total, (pde_total, bc_total, itf_total)).
+    Три глобальных лосса MPINN:
+        pde_total = Σ_domains loss_pde_i              (сырые, из aux)
+        bc_total  = Σ_domains Σ_bc loss_bc_i          (сырые, из aux)
+        if_total  = Σ_interfaces interface_loss_j
+
+    total = pde_weight · pde_total
+          + bc_weight  · bc_total
+          + if_weight  · if_total
     """
     if not source_fns:
         source_fns = (0.0,) * len(mpinn.pinns)
 
-    loss_dom = pde_total = bc_total = jnp.array(0.0)
+    pde_total = jnp.array(0.0)
+    bc_total  = jnp.array(0.0)
     for pinn, x_d, src in zip(mpinn.pinns, x_collocations, source_fns):
-        per_domain, (pde, *bcs) = pinn_loss_fn(
-            pinn, x_d, src,
-            pde_weight=pde_weight, bc_weight=bc_weight,
-        )
-        loss_dom = loss_dom + per_domain
-        pde_total = pde_total + pde
-        if bcs:
-            bc_total = bc_total + sum(bcs)
+        _, (pde_raw, *bcs_raw) = pinn_loss_fn(pinn, x_d, src)
+        pde_total = pde_total + pde_raw
+        if bcs_raw:
+            bc_total = bc_total + sum(bcs_raw)
 
-    itf_total = jnp.array(0.0)
+    if_total = jnp.array(0.0)
     for pts, n1, n2, (i, j) in zip(
         mpinn.interface_pts, mpinn.interface_n1, mpinn.interface_n2,
         mpinn.interface_pairs,
     ):
         p_i, p_j = mpinn.pinns[i], mpinn.pinns[j]
-        itf_total = itf_total + interface_loss(
+        if_total = if_total + interface_loss(
             p_i.net, p_j.net, pts, n1, n2, p_i.lam, p_j.lam
         )
 
-    total = loss_dom + interface_weight * itf_total
-    return total, (pde_total, bc_total, itf_total)
+    total = (pde_weight * pde_total
+             + bc_weight * bc_total
+             + if_weight * if_total)
+    return total, (pde_total, bc_total, if_total)
 
 
 def init_opt_states(mpinn, txs):
@@ -152,7 +157,7 @@ def train_step(mpinn, txs, opt_states, x_collocations, loss_kwargs):
 def fit(mpinn, txs, opt_states, x_collocations, epochs,
         loss_kwargs=None, log_interval=100, print_log=False):
     loss_kwargs = loss_kwargs or {}
-    history = {k: [] for k in ("total_loss", "pde_total", "bc_total", "itf_total")}
+    history = {k: [] for k in ("total_loss", "pde_total", "bc_total", "if_total")}
     t0 = time.perf_counter()
 
     for step in range(epochs):
@@ -163,7 +168,7 @@ def fit(mpinn, txs, opt_states, x_collocations, epochs,
             history["total_loss"].append(float(total))
             history["pde_total"].append(float(aux[0]))
             history["bc_total"].append(float(aux[1]))
-            history["itf_total"].append(float(aux[2]))
+            history["if_total"].append(float(aux[2]))
             if print_log:
                 print(f"\rstep {step:6d} | total={float(total):.3e} "
                       f"pde={float(aux[0]):.3e} bc={float(aux[1]):.3e} "

@@ -66,7 +66,7 @@ def save_plot(
 def show_history(history, log_interval=1, save_path=None):
     """
     Универсальная визуализация истории обучения.
-    Работает и для PINN (pde, bc_total, bc_i), и для MPINN (pde_total, bc_total, itf_total).
+    Работает и для PINN (pde, bc_total, bc_i), и для MPINN (pde_total, bc_total, if_total).
     """
     # --- длина истории ---
     sample_key = next((k for k, v in history.items() if len(v) > 0), None)
@@ -100,8 +100,8 @@ def show_history(history, log_interval=1, save_path=None):
                         label="ГУ", linewidth=2)
 
     # --- Интерфейс (только MPINN) ---
-    if "itf_total" in history:
-        ax.semilogy(epochs, history["itf_total"], "m--",
+    if "if_total" in history:
+        ax.semilogy(epochs, history["if_total"], "m--",
                     label="Интерфейс", linewidth=2)
     else:
         itf_keys = sorted(k for k in history if k.startswith("interface_"))
