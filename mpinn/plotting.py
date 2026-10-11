@@ -63,54 +63,72 @@ def save_plot(
     plt.close()
 
 
-def show_history(history, save_path=None):
-    # --- Длина истории ---
+def show_history(history, log_interval=1, save_path=None):
+    """
+    Универсальная визуализация истории обучения.
+    Работает и для PINN (pde, bc_total, bc_i), и для MPINN (pde_total, bc_total, itf_total).
+    """
+    # --- длина истории ---
     sample_key = next((k for k, v in history.items() if len(v) > 0), None)
     if sample_key is None:
         print("Нет данных для отображения истории.")
         return
-    steps = list(range(len(history[sample_key])))
 
-    plt.figure(figsize=(12, 7))
+    n = len(history[sample_key])
+    epochs = [i * log_interval for i in range(n)]
 
-    # --- PDE (сумма, если ключи с индексами) ---
-    if "pde" in history:
-        plt.semilogy(steps, history["pde"], "b", label="PDE", linewidth=2)
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    # --- PDE ---
+    if "pde_total" in history:
+        ax.semilogy(epochs, history["pde_total"], "b",
+                    label="PDE", linewidth=2)
+    elif "pde" in history:
+        ax.semilogy(epochs, history["pde"], "b",
+                    label="PDE", linewidth=2)
+
+    # --- ГУ (суммарный BC) ---
+    if "bc_total" in history:
+        ax.semilogy(epochs, history["bc_total"], "r--",
+                    label="ГУ", linewidth=2)
     else:
-        pde_keys = sorted(k for k in history if k.startswith("pde_"))
-        if pde_keys:
-            pde_sum = [sum(vals) for vals in zip(*[history[k] for k in pde_keys])]
-            plt.semilogy(steps, pde_sum, "b", label="PDE (сумма)", linewidth=2)
+        # fallback: сумма bc_i, если bc_total нет
+        bc_keys = sorted(k for k in history if k.startswith("bc_"))
+        if bc_keys:
+            bc_sum = [sum(vals) for vals in zip(*[history[k] for k in bc_keys])]
+            ax.semilogy(epochs, bc_sum, "r--",
+                        label="ГУ", linewidth=2)
+
+    # --- Интерфейс (только MPINN) ---
+    if "itf_total" in history:
+        ax.semilogy(epochs, history["itf_total"], "m--",
+                    label="Интерфейс", linewidth=2)
+    else:
+        itf_keys = sorted(k for k in history if k.startswith("interface_"))
+        if itf_keys:
+            itf_sum = [sum(vals) for vals in zip(*[history[k] for k in itf_keys])]
+            ax.semilogy(epochs, itf_sum, "m--",
+                        label="Интерфейс", linewidth=2)
 
     # --- Общая ---
     if "total_loss" in history:
-        plt.semilogy(steps, history["total_loss"], "g--",
-                     label="Общая", linewidth=2, alpha=0.7)
+        ax.semilogy(epochs, history["total_loss"], "g--",
+                    label="Общая", linewidth=2, alpha=0.7)
 
-    # --- BC и интерфейсы ---
-    bc_keys = [k for k in history
-               if (k.startswith("bc_") or k.startswith("interface_"))
-               and k not in ("bc_total",)]
-    colors = ["r", "c", "m", "y", "k", "orange", "purple"]
-    for i, key in enumerate(bc_keys):
-        color = colors[i % len(colors)]
-        label = key.replace("bc_", "ГУ ").replace("interface_", "Интерфейс ")
-        plt.semilogy(steps, history[key], f"{color}--",
-                     label=label, linewidth=1.5, alpha=0.7)
+    ax.set_title("История обучения")
+    ax.set_xlabel("Эпохи")
+    ax.set_ylabel("Потери")
+    ax.legend(loc="upper right")
+    ax.grid(True, alpha=0.3, which="both")
+    fig.tight_layout()
 
-    plt.title("История обучения")
-    plt.xlabel("Эпохи")
-    plt.ylabel("Потери")
-    plt.legend(loc="upper right")
-    plt.grid(True, alpha=0.3, which="both")
-    plt.tight_layout()
-    plt.show()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=72, bbox_inches="tight")
+        fig.savefig(save_path, dpi=72, bbox_inches="tight")
         print(f"График сохранён: {save_path}")
-    else:
-        plt.close()
+
+    plt.show()
+    plt.close(fig)
 
 def show_plot_mpinn(
     domain_data: list[dict],
@@ -119,31 +137,9 @@ def show_plot_mpinn(
     title: str = "MPINN: сравнение с аналитическим решением",
     save_path: str | None = None,
 ) -> None:
-    """
-    График MPINN 1D: несколько доменов + аналитическое решение + интерфейсы.
-
-    Parameters
-    ----------
-    domain_data : list[dict]
-        Для каждого домена:
-        {
-            'x':        (N,) — координаты,
-            'T_pred':   (N,) — предсказание PINN,
-            'T_exact':  (N,) — аналитическое решение (опционально),
-            'label':    str  — например, "Медь (λ=400)",
-            'color':    str  — цвет кривой (опционально),
-        }
-    exact_fn : callable | None
-        Функция точного решения `exact_fn(x) -> T`. Если задана, рисуется
-        на всём диапазоне одной синей линией.
-    interfaces : list[float] | None
-        Координаты интерфейсов для вертикальных линий.
-    save_path : str | None
-        Если задан — сохраняет PNG, иначе `plt.show()`.
-    """
     fig, ax = plt.subplots(figsize=(10, 5))
 
-    # --- Аналитическое решение (на всём диапазоне) ---
+    # --- Аналитическое решение ---
     if exact_fn is not None:
         x_min = min(d['x'].min() for d in domain_data)
         x_max = max(d['x'].max() for d in domain_data)
@@ -159,7 +155,6 @@ def show_plot_mpinn(
         ax.plot(d['x'], d['T_pred'], ':', color=color,
                 label=label, linewidth=5, zorder=2)
 
-        # Точное решение домена (если есть) — тонкой пунктирной
         if 'T_exact' in d:
             ax.plot(d['x'], d['T_exact'], '--', color=color,
                     linewidth=1, alpha=0.5, zorder=0)
@@ -169,7 +164,6 @@ def show_plot_mpinn(
         for x_int in interfaces:
             ax.axvline(x_int, color='gray', linestyle='--',
                        linewidth=1.5, alpha=0.6, zorder=0)
-        # Подпись только для первого, чтобы не дублировать в легенде
         ax.axvline(np.nan, color='gray', linestyle='--',
                    linewidth=1.5, alpha=0.6, label='Интерфейс')
 
@@ -178,12 +172,16 @@ def show_plot_mpinn(
     ax.set_ylabel("T, К", fontsize=13)
     ax.legend(loc='best', fontsize=11)
     ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.show()
+    fig.tight_layout()
+
+    # --- Сначала сохраняем, потом показываем ---
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=100, bbox_inches='tight')
-        plt.close()
+        fig.savefig(save_path, dpi=100, bbox_inches='tight')
+        print(f"Saved: {save_path}")
+
+    plt.show()
+    plt.close(fig)
 
 # ===================== 2D/3D графики =====================
 def plot_2d_contour(

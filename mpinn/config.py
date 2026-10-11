@@ -40,17 +40,21 @@ def get_activation(name: str):
     return mapping.get(name, nnx.relu)
 
 
-def get_optimizer(name: str, lr: float):
-    """Фабрика оптимизаторов."""
+def get_optimizer(name: str, lr: float, schedule=None):
+    """Фабрика оптимизаторов с поддержкой learning rate scheduler."""
     name = name.lower()
+
+    def _wrap(base_lr):
+        return schedule if schedule is not None else base_lr
+
     if name == "adam":
-        return optax.adam(lr)
+        return optax.adam(_wrap(lr))
     if name == "sgd":
-        return optax.sgd(lr)
+        return optax.sgd(_wrap(lr))
     if name == "adagrad":
-        return optax.adagrad(lr)
+        return optax.adagrad(_wrap(lr))
     if name == "rmsprop":
-        return optax.rmsprop(lr)
+        return optax.rmsprop(_wrap(lr))
     raise ValueError(f"Неизвестный оптимизатор: {name}.")
 
 

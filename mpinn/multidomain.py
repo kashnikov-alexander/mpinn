@@ -22,6 +22,8 @@ class MPINN:
         interface_pairs: list[tuple],        # [(idx1, name1, idx2, name2), ...]
         n_interface_points: int,
         interface_weight: float = 1.0,
+        pde_weight: float = 1.0,
+        bc_weight:  float = 1.0,
         rng: jax.Array | None = None,
     ):
         """
@@ -48,6 +50,8 @@ class MPINN:
         self.domain_configs = domain_configs
         self.interface_pairs = interface_pairs
         self.interface_weight = interface_weight
+        self.pde_weight = float(pde_weight)
+        self.bc_weight  = float(bc_weight)
 
         if rng is None:
             rng = jax.random.PRNGKey(0)
@@ -58,7 +62,7 @@ class MPINN:
             PINN(
                 net=cfg['net'],
                 opt=cfg['opt'],
-                weights=cfg['weights'],
+                weights=(1.0, 1.0),
                 pde_fn=cfg['pde_fn'],
                 bc_configs=cfg['bc_configs'],
                 lam=cfg['lam'],
@@ -103,37 +107,35 @@ class MPINN:
         x_collocs = self.x_collocation
         itf_data = self.interface_data
         lambdas = self.lambdas
-        itf_w = self.interface_weight
+        itf_w   = self.interface_weight
+        w_pde   = self.pde_weight
+        w_bc    = self.bc_weight
 
         def total_loss(params_tuple):
-            # params_tuple[i] — params i-го PINN
             models = tuple(
                 nnx.merge(p.graphdef, p_params)
                 for p, p_params in zip(pinns, params_tuple)
             )
 
-            # --- PDE + BC по доменам через PINN.loss_fn ---
-            domain_losses = []
-            pde_losses = []
-            bc_losses = []
+            # --- PDE + BC по доменам ---
+            pde_total = jnp.array(0.0)
+            bc_total  = jnp.array(0.0)
             for pinn, model, x_d in zip(pinns, models, x_collocs):
-                d_loss, aux = pinn.loss_fn(model, x_d)     # (total, (pde, *bcs))
-                domain_losses.append(d_loss)
-                pde_losses.append(aux[0])
-                bc_losses.append(sum(aux[1:]) if len(aux) > 1 else 0.0)
+                _, aux = pinn.loss_fn(model, x_d)          # aux = (pde, *bcs)
+                pde_total = pde_total + aux[0]
+                if len(aux) > 1:
+                    bc_total = bc_total + sum(aux[1:])
 
             # --- Интерфейсные лоссы ---
-            interface_losses = []
+            itf_total = jnp.array(0.0)
             for pts, n1, n2, idx1, idx2 in itf_data:
                 m1, m2 = models[idx1], models[idx2]
                 lam1, lam2 = lambdas[idx1], lambdas[idx2]
 
-                # Непрерывность T
                 T1 = m1(pts).ravel()
                 T2 = m2(pts).ravel()
                 cont_T = jnp.mean((T1 - T2) ** 2)
 
-                # Непрерывность потока: lambda1*∂T1/∂n1 + lambda2*∂T2/∂n2 = 0
                 def grad_normal(model, points, normals):
                     def predict_one(x):
                         return model(x.reshape(1, -1)).ravel()[0]
@@ -144,17 +146,12 @@ class MPINN:
                 dT2n = grad_normal(m2, pts, n2)
                 cont_flux = jnp.mean((lam1 * dT1n + lam2 * dT2n) ** 2)
 
-                interface_losses.append(cont_T + cont_flux)
+                itf_total = itf_total + cont_T + cont_flux
 
-            total = sum(domain_losses) + itf_w * sum(interface_losses)
+            # --- Итоговый лосс (формула из статьи) ---
+            total = w_pde * pde_total + w_bc * bc_total + itf_w * itf_total
 
-            aux_out = (
-                *domain_losses,
-                *interface_losses,
-                *pde_losses,
-                *bc_losses,
-            )
-            return total, aux_out
+            return total, (pde_total, bc_total, itf_total)
 
         return total_loss
 
@@ -197,13 +194,7 @@ class MPINN:
 
     def fit(self, epochs: int = 1000, log_interval: int = 100):
         loss_fn = self.loss_fn
-        n_itf = len(self.interface_data)
-        loss_names = (
-            *[f"domain_{i}"    for i in range(self.n_domains)],
-            *[f"interface_{i}" for i in range(n_itf)],
-            *[f"pde_{i}"       for i in range(self.n_domains)],
-            *[f"bc_{i}"        for i in range(self.n_domains)],
-        )
+        loss_names = ("pde_total", "bc_total", "itf_total")
 
         history = {"total_loss": []}
         for name in loss_names:
@@ -382,9 +373,17 @@ class MPINN:
             else:
                 no_improve += 1
 
-            print(f"[block {total_epochs:6d}] RL2 = {rl2:.4e} "
-                f"(best = {best_rl2:.4e} at {best_epoch}, "
-                f"patience = {no_improve}/{patience})")
+            pde_last = block_history.get("pde_total", [float("nan")])[-1]
+            bc_last  = block_history.get("bc_total",  [float("nan")])[-1]
+            if_last  = block_history.get("itf_total", [float("nan")])[-1]
+
+            print(
+                f"[block {total_epochs:6d}] "
+                f"RL2={rl2:.4e}  "
+                f"PDE={pde_last:.3e}  BC={bc_last:.3e}  IF={if_last:.3e}  "
+                f"(best RL2={best_rl2:.4e} @ {best_epoch}, "
+                f"patience={no_improve}/{patience})"
+)
 
             if rl2 < target_rl2:
                 print(f"Target RL2 = {target_rl2:.2e} достигнут на эпохе {total_epochs}")
