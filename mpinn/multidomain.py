@@ -155,7 +155,7 @@ def train_step(mpinn, txs, opt_states, x_collocations, loss_kwargs):
 
 
 def fit(mpinn, txs, opt_states, x_collocations, epochs,
-        loss_kwargs=None, log_interval=100, print_log=False):
+        loss_kwargs=None, log_interval=100, print_log=True):
     loss_kwargs = loss_kwargs or {}
     history = {k: [] for k in ("total_loss", "pde_total", "bc_total", "if_total")}
     t0 = time.perf_counter()
@@ -165,16 +165,21 @@ def fit(mpinn, txs, opt_states, x_collocations, epochs,
             mpinn, txs, opt_states, x_collocations, loss_kwargs
         )
         if step % log_interval == 0 or step == epochs - 1:
-            history["total_loss"].append(float(total))
-            history["pde_total"].append(float(aux[0]))
-            history["bc_total"].append(float(aux[1]))
-            history["if_total"].append(float(aux[2]))
+            t_val = float(total)
+            pde_v = float(aux[0])
+            bc_v  = float(aux[1])
+            if_v  = float(aux[2])
+            history["total_loss"].append(t_val)
+            history["pde_total"].append(pde_v)
+            history["bc_total"].append(bc_v)
+            history["if_total"].append(if_v)
+
             if print_log:
-                print(f"\rstep {step:6d} | total={float(total):.3e} "
-                      f"pde={float(aux[0]):.3e} bc={float(aux[1]):.3e} "
-                      f"if={float(aux[2]):.3e}".ljust(120), end="")
-    if print_log:
-        print()
+                print(f"step {step:6d} | "
+                      f"total={t_val:.3e}  "
+                      f"pde={pde_v:.3e}  "
+                      f"bc={bc_v:.3e}  "
+                      f"if={if_v:.3e}")
 
     return mpinn, opt_states, history, time.perf_counter() - t0
 
@@ -216,11 +221,11 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, geometries,
                  x_test, exact_fn,
                  target_rl2=1e-3, block_epochs=500, max_epochs=50_000,
                  log_interval=500, patience=5, tol=1e-6,
-                 loss_kwargs=None, dim=None):
+                 loss_kwargs=None, dim=None, print_log=True):
     loss_kwargs = loss_kwargs or {}
     t0 = time.perf_counter()
     history = {}
-    total_epochs = best_rl2 = 0
+    total_epochs = 0
     best_rl2 = float("inf")
     best_mpinn, best_states, best_epoch, no_improve = mpinn, opt_states, 0, 0
 
@@ -229,6 +234,7 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, geometries,
         mpinn, opt_states, block_h, _ = fit(
             mpinn, txs, opt_states, x_collocations, block,
             loss_kwargs=loss_kwargs, log_interval=log_interval,
+            print_log=print_log,
         )
         total_epochs += block
         for k, v in block_h.items():
@@ -241,8 +247,16 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, geometries,
         else:
             no_improve += 1
 
-        print(f"[block {total_epochs:6d}] RL2={rl2:.4e} "
-              f"(best={best_rl2:.4e} @ {best_epoch}, "
+        pde_last = history["pde_total"][-1] if history["pde_total"] else float("nan")
+        bc_last  = history["bc_total"][-1] if history["bc_total"] else float("nan")
+        if_last  = history["if_total"][-1] if history["if_total"] else float("nan")
+
+        print(f"[block {total_epochs:6d}] "
+              f"RL2={rl2:.4e}  "
+              f"pde={pde_last:.3e}  "
+              f"bc={bc_last:.3e}  "
+              f"if={if_last:.3e}  "
+              f"(best RL2={best_rl2:.4e} @ {best_epoch}, "
               f"patience={no_improve}/{patience})")
 
         if rl2 < target_rl2:

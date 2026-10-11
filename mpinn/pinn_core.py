@@ -25,7 +25,7 @@ import optax
 # ============================================================ сети
 
 class FCNet(eqx.Module):
-    """Полносвязная нейронная сеть для PINN."""
+    """Полносвязная сеть. Принимает (din,) или (N, din), возвращает (dout,) или (N, dout)."""
 
     layers: list
     linear_out: eqx.nn.Linear
@@ -40,36 +40,30 @@ class FCNet(eqx.Module):
         self.linear_out = eqx.nn.Linear(dmid, dout, key=keys[-1])
         self.activation = activation
 
-    def __call__(self, x):
+    def _forward_one(self, x):
+        """Одна точка: x = (din,) -> (dout,)."""
         for layer in self.layers:
             x = layer(x)
             x = self.activation(x)
         return self.linear_out(x)
 
-
-import equinox as eqx
-import jax.numpy as jnp
-
+    def __call__(self, x):
+        """(din,) -> (dout,)   или   (N, din) -> (N, dout)."""
+        if x.ndim == 1:
+            return self._forward_one(x)
+        return jax.vmap(self._forward_one)(x)
 
 # ============================================================ прямоугольник
 
 class ScaledNet(eqx.Module):
-    """
-    Прямоугольная область: нормирует только вход (координаты).
-    Выход сети — физическая температура, без масштабирования.
-
-        x_norm = (x − x_min) / (x_max − x_min)
-        T      = base(x_norm)
-    """
-
     base: eqx.Module
-    x_min: jax.Array = eqx.field(static=True)
-    x_max: jax.Array = eqx.field(static=True)
+    x_min: jax.Array
+    x_max: jax.Array
 
     def __init__(self, base, x_min, x_max):
         self.base = base
-        self.x_min = jnp.asarray(x_min)
-        self.x_max = jnp.asarray(x_max)
+        self.x_min = jnp.asarray(x_min, dtype=jnp.float32)
+        self.x_max = jnp.asarray(x_max, dtype=jnp.float32)
 
     def __call__(self, x):
         x_norm = (x - self.x_min) / (self.x_max - self.x_min)
@@ -80,19 +74,29 @@ class ScaledNet(eqx.Module):
 
 class RadialScaledNet(eqx.Module):
     """
-    Кольцевая область: нормирует только вход.
-    r → r_norm (min-max или log), θ → (cos θ, sin θ), опционально z → z_norm.
-    Выход сети — физическая температура.
+    Кольцевая область: нормирует только вход. Выход сети — физическая T.
+
+    Вход:
+        x = (r, theta)          — 2D annulus
+        x = (r, theta, z)       — 3D annulus (z опционально)
+
+    Нормировка:
+        r      -> r_norm  (min-max или log)
+        theta  -> (cos theta, sin theta)
+        z      -> z_norm  (min-max, если задан)
+
+    din для base:
+        2D: 3   (r_norm, cos, sin)
+        3D: 4   (r_norm, cos, sin, z_norm)
 
     R_inner сохраняется как аддитивный сдвиг (или база логарифма),
-    поэтому r = R_inner ≠ 0 корректно попадает в pde_fn как 1/r.
+    поэтому r = R_inner != 0 корректно попадает в pde_fn как 1/r.
     """
 
     base: eqx.Module
     R_inner: float = eqx.field(static=True)
     R_outer: float = eqx.field(static=True)
     log_radius: bool = eqx.field(static=True)
-
     has_z: bool = eqx.field(static=True)
     z_min: float = eqx.field(static=True)
     z_max: float = eqx.field(static=True)
@@ -104,24 +108,29 @@ class RadialScaledNet(eqx.Module):
         self.R_outer = float(R_outer)
         self.log_radius = bool(log_radius)
 
-        self.has_z = z_min is not None and z_max is not None
+        self.has_z = (z_min is not None) and (z_max is not None)
         self.z_min = float(z_min) if z_min is not None else 0.0
         self.z_max = float(z_max) if z_max is not None else 1.0
 
     def __call__(self, x):
+        dtype = x.dtype
+
         r = x[..., 0:1]
         theta = x[..., 1:2]
 
         if self.log_radius:
-            r_norm = jnp.log(r / self.R_inner) / jnp.log(self.R_outer / self.R_inner)
+            r_norm = jnp.log(r / jnp.asarray(self.R_inner, dtype)) / \
+                     jnp.log(jnp.asarray(self.R_outer / self.R_inner, dtype))
         else:
-            r_norm = (r - self.R_inner) / (self.R_outer - self.R_inner)
+            r_norm = (r - jnp.asarray(self.R_inner, dtype)) / \
+                     jnp.asarray(self.R_outer - self.R_inner, dtype)
 
         parts = [r_norm, jnp.cos(theta), jnp.sin(theta)]
 
         if self.has_z:
             z = x[..., 2:3]
-            z_norm = (z - self.z_min) / (self.z_max - self.z_min)
+            z_norm = (z - jnp.asarray(self.z_min, dtype)) / \
+                     jnp.asarray(self.z_max - self.z_min, dtype)
             parts.append(z_norm)
 
         x_norm = jnp.concatenate(parts, axis=-1)
@@ -130,45 +139,40 @@ class RadialScaledNet(eqx.Module):
 
 # ============================================================ утилиты
 
+from typing import Callable, Optional
+
+
+class BCConfig(eqx.Module):
+    """
+    Одно граничное условие.
+      fn, params  — static (callable + tuple из hashable-скаляров)
+      points, normals — данные (JAX-массивы, листья pytree)
+    """
+    fn: Callable = eqx.field(static=True)
+    params: tuple = eqx.field(static=True)
+    points: jax.Array
+    normals: Optional[jax.Array] = None
+
+
 def _freeze_bc_configs(bc_configs: list[dict]) -> tuple:
-    """
-    list[dict] → tuple из (fn, points, normals, params_tuple).
-    Нужно, чтобы bc_configs можно было держать как static-поле eqx.Module.
-    """
-    frozen = []
-    for c in bc_configs:
-        params = tuple(sorted(c.get("params", {}).items()))
-        frozen.append((
-            c["fn"],
-            jnp.asarray(c["points"]),
-            jnp.asarray(c["normals"]) if c.get("normals") is not None else None,
-            params,
-        ))
-    return tuple(frozen)
+    return tuple(
+        BCConfig(
+            fn=c["fn"],
+            params=tuple(sorted(c.get("params", {}).items())),
+            points=jnp.asarray(c["points"]),
+            normals=jnp.asarray(c["normals"]) if c.get("normals") is not None else None,
+        )
+        for c in bc_configs
+    )
 
-
-# ============================================================ модель
 
 class PINN(eqx.Module):
-    """
-    Физически-информированная нейронная сеть.
-
-    Только поля и __call__. Всё остальное — свободные функции ниже.
-
-    Поля lam / pde_weight / bc_weight — не static, поэтому:
-      * если не обучать их — просто лежат рядом с моделью;
-      * если обучать (inverse problem, adaptive weights) — попадают
-        в filter(pinn, is_inexact_array), их видит оптимизатор и
-        filter_value_and_grad. Никаких изменений в API обучения не нужно.
-    """
-
     net: eqx.Module
     lam: jax.Array
     pde_weight: jax.Array
     bc_weight: jax.Array
-
     pde_fn: Callable = eqx.field(static=True)
-    bc_configs: tuple = eqx.field(static=True)
+    bc_configs: tuple = ()          # НЕ static — теперь pytree
 
     def __init__(self, net, pde_fn, bc_configs,
                  lam=1.0, pde_weight=1.0, bc_weight=1.0):
@@ -181,6 +185,9 @@ class PINN(eqx.Module):
 
     def __call__(self, x):
         return self.net(x)
+
+
+
 
 
 # ============================================================ оптимизация
@@ -215,17 +222,16 @@ def loss_fn(pinn: PINN, x_collocation, source_fn=0.0):
     только к total — компоненты в aux остаются «сырыми», чтобы history
     был сопоставим между запусками с разными весами.
     """
-    residuals_pde = pinn.pde_fn(pinn.net, x_collocation,
-                                pinn.lam, source_fn)
+    residuals_pde = pinn.pde_fn(pinn.net, x_collocation, pinn.lam, source_fn)
     loss_pde = jnp.mean(residuals_pde ** 2)
 
     loss_bcs = []
-    for fn, points, normals, params_tuple in pinn.bc_configs:
-        params = dict(params_tuple)
-        if normals is not None:
-            residuals = fn(pinn.net, points, normals, **params)
+    for bc in pinn.bc_configs:
+        params = dict(bc.params)
+        if bc.normals is not None:
+            residuals = bc.fn(pinn.net, bc.points, bc.normals, **params)
         else:
-            residuals = fn(pinn.net, points, **params)
+            residuals = bc.fn(pinn.net, bc.points, **params)
         loss_bcs.append(jnp.mean(residuals ** 2))
 
     loss_bc_total = sum(loss_bcs) if loss_bcs else jnp.array(0.0)
