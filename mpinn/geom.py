@@ -122,11 +122,11 @@ def _plot_2d(interior, boundary=None, interface=None, title="Domain Visualizatio
                 c="green",
                 s=20,
                 alpha=0.7,
-                label="Граница",
+                label="Граничные точки",
             )
 
             if show_normals:
-                for i in range(min(50, len(boundary_pts))):
+                for i in range(len(boundary_pts)):
                     pt = boundary_pts[i]
                     n = normals[i]
                     plt.arrow(
@@ -136,8 +136,8 @@ def _plot_2d(interior, boundary=None, interface=None, title="Domain Visualizatio
                         scale * n[1],
                         head_width=0.02,
                         head_length=0.03,
-                        fc="red",
-                        ec="red",
+                        fc="pink",
+                        ec="pink",
                     )
         else:
             plt.scatter(
@@ -365,12 +365,7 @@ class Interval(GeometryBase):
         if not isinstance(other_geom, Interval):
             raise TypeError("other_geom must be Interval")
         pts, normals_self = self._generate_boundary_points(self_interface_name, n_points, method, rng)
-        normals_other = -normals_self
-        # Проверка совпадения (опционально)
-        other_pts, _ = other_geom._generate_boundary_points(other_interface_name, n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError(f"Interface points do not match: self.{self_interface_name} vs other.{other_interface_name}")
-        return pts, normals_self, normals_other
+        return pts, normals_self
 
     @property
     def bounds(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -522,11 +517,7 @@ class Box2D(GeometryBase):
         if not isinstance(other_geom, Box2D):
             raise TypeError("other_geom must be Box2D")
         pts, normals_self = self._generate_boundary_points(self_interface_name, n_points, method, rng)
-        normals_other = -normals_self
-        other_pts, _ = other_geom._generate_boundary_points(other_interface_name, n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError(f"Interface points do not match: self.{self_interface_name} vs other.{other_interface_name}")
-        return pts, normals_self, normals_other
+        return pts, normals_self
 
     @property
     def bounds(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -759,11 +750,7 @@ class Box3D(GeometryBase):
         if not isinstance(other_geom, Box3D):
             raise TypeError("other_geom must be Box3D")
         pts, normals_self = self._generate_boundary_points(self_interface_name, n_points, method, rng)
-        normals_other = -normals_self
-        other_pts, _ = other_geom._generate_boundary_points(other_interface_name, n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError(f"Interface points do not match: self.{self_interface_name} vs other.{other_interface_name}")
-        return pts, normals_self, normals_other
+        return pts, normals_self
 
     @property
     def bounds(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -895,11 +882,7 @@ class Sphere(GeometryBase):
         if self_interface_name != 'outer' or other_interface_name != 'outer':
             raise ValueError("Sphere interface only supported for 'outer' boundary")
         pts, normals_self = self._generate_boundary_points('outer', n_points, method, rng)
-        normals_other = -normals_self
-        other_pts, _ = other_geom._generate_boundary_points('outer', n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError("Interface points do not match: sphere surfaces do not coincide")
-        return pts, normals_self, normals_other
+        return pts, normals_self
 
     @property
     def bounds(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -1079,11 +1062,7 @@ class Annulus2D(GeometryBase):
         if not isinstance(other_geom, Annulus2D):
             raise TypeError("other_geom must be Annulus2D")
         pts, normals_self = self._generate_boundary_points(self_interface_name, n_points, method, rng)
-        normals_other = -normals_self
-        other_pts, _ = other_geom._generate_boundary_points(other_interface_name, n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError(f"Interface points do not match: self.{self_interface_name} vs other.{other_interface_name}")
-        return pts, normals_self, normals_other
+        return pts, normals_self
 
     @property
     def bounds(self) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -1317,15 +1296,7 @@ class HollowCylinder3D(GeometryBase):
             raise TypeError("other_geom must be HollowCylinder3D")
         pts, normals_self = self._generate_boundary_points(
             self_interface_name, n_points, method, rng)
-        normals_other = -normals_self
-        other_pts, _ = other_geom._generate_boundary_points(
-            other_interface_name, n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError(
-                f"Interface points do not match: "
-                f"self.{self_interface_name} vs other.{other_interface_name}"
-            )
-        return pts, normals_self, normals_other
+        return pts, normals_self
 
     # ------------------------------------------------------------ bounds
 
@@ -1486,16 +1457,7 @@ class HollowSphere3D(GeometryBase):
             raise TypeError("other_geom must be HollowSphere3D")
         pts, normals_self = self._generate_boundary_points(
             self_interface_name, n_points, method, rng)
-        normals_other = -normals_self
-        other_pts, _ = other_geom._generate_boundary_points(
-            other_interface_name, n_points, method, rng)
-        if not jnp.allclose(pts, other_pts):
-            raise ValueError(
-                f"Interface points do not match: "
-                f"self.{self_interface_name} vs other.{other_interface_name}"
-            )
-        return pts, normals_self, normals_other
-
+        return pts, normals_self
     # ------------------------------------------------------------ bounds
 
     @property

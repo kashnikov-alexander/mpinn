@@ -9,7 +9,7 @@ from mpinn.geom import Interval
 from mpinn.pde import line_1d
 from mpinn.pinn_core import FCNet
 
-from mpinn.config import PhysicsParams
+from mpinn.utils import PhysicsParams
 
 phys = PhysicsParams(_lambda=1.0, T_min=0.0, T_max=1.0)
 

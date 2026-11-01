@@ -14,7 +14,7 @@ from mpinn.analytic import (
     sphere_1d_neuman_exact,
     sphere_1d_robin_exact,
 )
-from mpinn.config import PhysicsParams
+from mpinn.utils import PhysicsParams
 
 
 # Helper to create a dummy physics object with _lambda

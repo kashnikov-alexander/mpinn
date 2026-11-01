@@ -39,7 +39,6 @@ def show_plot(
     plt.tight_layout()
     plt.show()
 
-
 def save_plot(
     x_test: Union[np.ndarray, "jnp.ndarray"],
     T_pred: Union[np.ndarray, "jnp.ndarray"],
@@ -62,63 +61,71 @@ def save_plot(
     plt.savefig(save_path, dpi=72, bbox_inches="tight")
     plt.close()
 
+def show_history(
+    history,
+    labels=None,
+    logy=True,
+    figsize=(12, 7),
+    title="История обучения",
+    xlabel="Эпохи",
+    ylabel="Потери",
+    save_path=None,
+):
+    """Универсальная визуализация истории обучения.
 
-def show_history(history, log_interval=1, save_path=None):
+    history: dict[str, list[float] | np.ndarray]
+        Должен содержать 'steps' (x-ось). Остальные ключи — что рисовать.
+    labels: list[str] | None
+        None → все ключи, кроме 'steps'.
+        list → только эти ключи, в этом порядке.
+    logy: bool
+        Логарифмическая шкала по y. Отключайте, если среди значений есть <= 0.
+    save_path: str | None
+        Если задан — сохранить в файл.
+
+    Returns
+    -------
+    (fig, ax)
     """
-    Универсальная визуализация истории обучения.
-    Работает и для PINN (pde, bc_total, bc_i), и для MPINN (pde_total, bc_total, if_total).
-    """
-    # --- длина истории ---
-    sample_key = next((k for k, v in history.items() if len(v) > 0), None)
-    if sample_key is None:
-        print("Нет данных для отображения истории.")
-        return
+    if "steps" not in history:
+        raise KeyError(
+            "history должен содержать 'steps'. "
+            "fit() всегда его пишет; проверьте, что вы передаёте history, "
+            "а не отдельный список."
+        )
 
-    n = len(history[sample_key])
-    epochs = [i * log_interval for i in range(n)]
+    steps = np.asarray(history["steps"])
+    n = len(steps)
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+    if labels is None:
+        labels = [k for k in history if k != "steps"]
 
-    # --- PDE ---
-    if "pde_total" in history:
-        ax.semilogy(epochs, history["pde_total"], "b",
-                    label="PDE", linewidth=2)
-    elif "pde" in history:
-        ax.semilogy(epochs, history["pde"], "b",
-                    label="PDE", linewidth=2)
+    if not labels:
+        raise ValueError("Нет ключей для отображения.")
 
-    # --- ГУ (суммарный BC) ---
-    if "bc_total" in history:
-        ax.semilogy(epochs, history["bc_total"], "r--",
-                    label="ГУ", linewidth=2)
-    else:
-        # fallback: сумма bc_i, если bc_total нет
-        bc_keys = sorted(k for k in history if k.startswith("bc_"))
-        if bc_keys:
-            bc_sum = [sum(vals) for vals in zip(*[history[k] for k in bc_keys])]
-            ax.semilogy(epochs, bc_sum, "r--",
-                        label="ГУ", linewidth=2)
+    fig, ax = plt.subplots(figsize=figsize)
 
-    # --- Интерфейс (только MPINN) ---
-    if "if_total" in history:
-        ax.semilogy(epochs, history["if_total"], "m--",
-                    label="Интерфейс", linewidth=2)
-    else:
-        itf_keys = sorted(k for k in history if k.startswith("interface_"))
-        if itf_keys:
-            itf_sum = [sum(vals) for vals in zip(*[history[k] for k in itf_keys])]
-            ax.semilogy(epochs, itf_sum, "m--",
-                        label="Интерфейс", linewidth=2)
+    for label in labels:
+        if label not in history:
+            raise KeyError(
+                f"history не содержит ключ {label!r}. "
+                f"Доступные: {sorted(k for k in history if k != 'steps')}"
+            )
+        values = np.asarray(history[label])
+        if len(values) != n:
+            raise ValueError(
+                f"Длина history[{label!r}] = {len(values)} "
+                f"не совпадает с длиной 'steps' = {n}."
+            )
+        ax.plot(steps, values, label=label, linewidth=2)
 
-    # --- Общая ---
-    if "total_loss" in history:
-        ax.semilogy(epochs, history["total_loss"], "g--",
-                    label="Общая", linewidth=2, alpha=0.7)
+    if logy:
+        ax.set_yscale("log")
 
-    ax.set_title("История обучения")
-    ax.set_xlabel("Эпохи")
-    ax.set_ylabel("Потери")
-    ax.legend(loc="upper right")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc="best")
     ax.grid(True, alpha=0.3, which="both")
     fig.tight_layout()
 
@@ -128,60 +135,91 @@ def show_history(history, log_interval=1, save_path=None):
         print(f"График сохранён: {save_path}")
 
     plt.show()
-    plt.close(fig)
+    return fig, ax
+
 
 def show_plot_mpinn(
-    domain_data: list[dict],
+    domain_data: list,
     exact_fn=None,
-    interfaces: list[float] | None = None,
+    interfaces=None,
     title: str = "MPINN: сравнение с аналитическим решением",
     save_path: str | None = None,
-) -> None:
-    fig, ax = plt.subplots(figsize=(10, 5))
+    dpi: int = 100,
+    figsize: tuple = (10, 5),
+    show: bool = True,
+):
+    """1D-профиль MPINN по доменам.
 
-    # --- Аналитическое решение ---
+    domain_data: list[dict]
+        каждый dict: {'x': array (N,), 'T_pred': array (N,),
+                      'color': str (опц.), 'label': str (опц.),
+                      'T_exact': array (N,) (опц.)}
+    exact_fn: callable | None
+        Если задан — рисуется сплошной линией на объединённом диапазоне x.
+        Вызывается как exact_fn(x.reshape(-1, 1)) -> (N, 1).
+    interfaces: list[float] | None
+        x-координаты интерфейсов (вертикальные линии).
+    save_path: str | None
+        Если задан — сохранить. dirname может быть пустым.
+    dpi: int
+    figsize: tuple
+    show: bool
+        False — не вызывать plt.show() (для batch-режима).
+
+    Returns
+    -------
+    (fig, ax)
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # --- Аналитическое решение на объединённом диапазоне ---
     if exact_fn is not None:
-        x_min = min(d['x'].min() for d in domain_data)
-        x_max = max(d['x'].max() for d in domain_data)
+        x_min = min(float(np.asarray(d["x"]).min()) for d in domain_data)
+        x_max = max(float(np.asarray(d["x"]).max()) for d in domain_data)
         x_full = np.linspace(x_min, x_max, 1000)
-        T_full = exact_fn(x_full.reshape(-1, 1)).ravel()
-        ax.plot(x_full, T_full, 'b-', label='Аналитическое', linewidth=2, zorder=1)
+        T_full = np.asarray(exact_fn(x_full.reshape(-1, 1))).ravel()
+        ax.plot(x_full, T_full, "b-",
+                label="Аналитическое решение", linewidth=2, zorder=1)
 
     # --- Домены ---
-    default_colors = ['#d62728', '#2ca02c', '#9467bd', '#ff7f0e', '#17becf']
     for i, d in enumerate(domain_data):
-        color = d.get('color', default_colors[i % len(default_colors)])
-        label = d.get('label', f'Домен {i}')
-        ax.plot(d['x'], d['T_pred'], ':', color=color,
+        color = d.get("color", plt.cm.tab10(i))
+        label = d.get("label", f"Домен {i}")
+        x = np.asarray(d["x"])
+        ax.plot(x, np.asarray(d["T_pred"]), ":", color=color,
                 label=label, linewidth=5, zorder=2)
 
-        if 'T_exact' in d:
-            ax.plot(d['x'], d['T_exact'], '--', color=color,
-                    linewidth=1, alpha=0.5, zorder=0)
+        # T_exact по домену — только если exact_fn НЕ задан
+        # (иначе дублирование с глобальной линией)
+        if exact_fn is None and "T_exact" in d:
+            ax.plot(x, np.asarray(d["T_exact"]), "--", color=color,
+                    linewidth=1, alpha=0.6, zorder=0)
 
     # --- Интерфейсы ---
     if interfaces:
-        for x_int in interfaces:
-            ax.axvline(x_int, color='gray', linestyle='--',
-                       linewidth=1.5, alpha=0.6, zorder=0)
-        ax.axvline(np.nan, color='gray', linestyle='--',
-                   linewidth=1.5, alpha=0.6, label='Интерфейс')
+        for k, x_int in enumerate(interfaces):
+            ax.axvline(x_int, color="gray", linestyle="--",
+                       linewidth=1.5, alpha=0.6, zorder=0,
+                       label="Интерфейс" if k == 0 else None)
 
     ax.set_title(title, fontsize=14)
     ax.set_xlabel("x, м", fontsize=13)
     ax.set_ylabel("T, К", fontsize=13)
-    ax.legend(loc='best', fontsize=11)
+    ax.legend(loc="best", fontsize=11)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
 
-    # --- Сначала сохраняем, потом показываем ---
     if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        fig.savefig(save_path, dpi=100, bbox_inches='tight')
+        dirname = os.path.dirname(save_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        fig.savefig(save_path, dpi=dpi, bbox_inches="tight")
         print(f"Saved: {save_path}")
 
-    plt.show()
-    plt.close(fig)
+    if show:
+        plt.show()
+
+    return fig, ax
 
 # ===================== 2D/3D графики =====================
 def plot_2d_contour(
@@ -381,6 +419,7 @@ def plot_3d_isosurface(
                    aspectmode="data"),
         width=900, height=700,
     )
+    fig.show()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         if save_path.endswith(".html"):
@@ -388,7 +427,7 @@ def plot_3d_isosurface(
         else:
             fig.write_image(save_path)
         print(f"Сохранено: {save_path}")
-    fig.show()
+
 
 
 def plot_3d_surface_plotly(
@@ -428,7 +467,7 @@ def plot_3d_surface_plotly(
         height=600,
         margin=dict(l=0, r=0, b=0, t=40)
     )
-
+    fig.show()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         if save_path.endswith('.html'):
@@ -437,4 +476,3 @@ def plot_3d_surface_plotly(
             fig.write_image(save_path)
         print(f"График сохранён: {save_path}")
 
-    fig.show()

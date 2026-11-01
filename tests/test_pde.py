@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from flax import nnx
 
 from mpinn.pde import cylinder_1d, line_1d, sphere_1d
-from mpinn.config import PhysicsParams
+from mpinn.utils import PhysicsParams
 
 phys = PhysicsParams(_lambda=1.0, T_min=0.0, T_max=1.0)
 
