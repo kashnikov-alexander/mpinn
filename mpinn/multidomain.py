@@ -3,7 +3,7 @@
 Контейнер — только поля. Всё остальное — свободные функции.
 bc_configs — аргумент fit_*/mpinn_loss_fn (не поле MPINN).
 
-weights = [w_pde, w_dir, w_neu, w_rob, w_if] — глобальные по типу BC.
+weights = [w_pde, w_dir, w_neu, w_rob, w_if_T, w_if_flux] — глобальные.
 Домены используют loss_fn_split_bc; веса внутри PINN фиктивны (1, 1, 1, 1),
 глобальная балансировка — на уровне mpinn.weights.
 """
@@ -31,10 +31,10 @@ class MPINN(eqx.Module):
     interface_n: tuple
     interface_pairs: tuple = eqx.field(static=True)
 
-    weights: jax.Array          # [w_pde, w_dir, w_neu, w_rob, w_if]
+    weights: jax.Array          # [w_pde, w_dir, w_neu, w_rob, w_if_T, w_if_flux]
 
     def __init__(self, pinns, interface_data,
-                 weights=(1.0, 1.0, 1.0, 1.0, 1.0)):
+                 weights=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)):
         self.pinns = tuple(pinns)
         self.interface_pts = tuple(d[0] for d in interface_data)
         self.interface_n = tuple(d[1] for d in interface_data)
@@ -63,8 +63,17 @@ class MPINN(eqx.Module):
         return self.weights[3]
 
     @property
-    def if_weight(self):
+    def if_T_weight(self):
         return self.weights[4]
+
+    @property
+    def if_flux_weight(self):
+        return self.weights[5]
+
+    @property
+    def if_weight(self):
+        """Суммарный вес интерфейса (для совместимости / отчётов)."""
+        return self.weights[4] + self.weights[5]
 
     @property
     def bc_weight(self):
@@ -75,10 +84,9 @@ class MPINN(eqx.Module):
 # ============================================================ interface loss
 
 def interface_loss(pinn_i, pinn_j, pts, n):
-    """continuity_T + continuity_flux на одном интерфейсе.
-
-    lam берётся из pinn_i.lam / pinn_j.lam; поддерживает скаляр,
-    массив и callable(T) (через _lambda_vals).
+    """Возвращает (continuity_T, continuity_flux) на одном интерфейсе.
+    
+    lam берётся из pinn_i.lam / pinn_j.lam.
     """
     T1 = pinn_i.net(pts).ravel()
     T2 = pinn_j.net(pts).ravel()
@@ -95,20 +103,15 @@ def interface_loss(pinn_i, pinn_j, pts, n):
     lam_j = _lambda_vals(pinn_j.net, pts, pinn_j.lam)
     cont_flux = jnp.mean((lam_i * dT1n + lam_j * dT2n) ** 2)
 
-    return cont_T + cont_flux
+    return cont_T, cont_flux
 
 
 # ============================================================ loss
 
-def mpinn_loss_fn(mpinn, x_collocations, bc_configs,
-                  source_fns=()):
+def mpinn_loss_fn(mpinn, x_collocations, bc_configs, source_fns=()):
     """Глобальный лосс MPINN.
 
-    Требует loss_fn_split_bc во всех доменах (aux — jnp.array формы (4,)).
-    bc_configs: tuple[tuple[BC, ...], ...] — BC по доменам.
-    source_fns: tuple[float | callable, ...] — source_fn по доменам.
-
-    Возвращает (total, (pde, bc_total, bc_dir, bc_neu, bc_rob, if_total)).
+    Возвращает (total, (pde, bc_total, bc_dir, bc_neu, bc_rob, if_T, if_flux)).
     """
     if not source_fns:
         source_fns = (0.0,) * len(mpinn.pinns)
@@ -122,7 +125,7 @@ def mpinn_loss_fn(mpinn, x_collocations, bc_configs,
         mpinn.pinns, x_collocations, bc_configs, source_fns,
     )):
         _, aux = loss_fn_split_bc(pinn, x_d, bcs, src)
-        if not (hasattr(aux, "shape") and aux.shape == (4,)):
+        if not (isinstance(aux, jax.Array) and aux.shape == (4,)):
             raise TypeError(
                 f"Домен {idx}: aux имеет форму "
                 f"{getattr(aux, 'shape', type(aux).__name__)}, "
@@ -134,18 +137,36 @@ def mpinn_loss_fn(mpinn, x_collocations, bc_configs,
         L_neu = L_neu + aux[2]
         L_rob = L_rob + aux[3]
 
-    L_if = jnp.array(0.0)
-    for pts, n, (i, j) in zip(
-        mpinn.interface_pts, mpinn.interface_n, mpinn.interface_pairs,
-    ):
-        L_if = L_if + interface_loss(mpinn.pinns[i], mpinn.pinns[j], pts, n)
-
+    # среднее по доменам
+    n_dom = len(mpinn.pinns)
+    L_pde = L_pde / n_dom
+    L_dir = L_dir / n_dom
+    L_neu = L_neu / n_dom
+    L_rob = L_rob / n_dom
     L_bc_total = L_dir + L_neu + L_rob
 
-    losses_vec = jnp.array([L_pde, L_dir, L_neu, L_rob, L_if])
+    # среднее по интерфейсам
+    L_if_T = jnp.array(0.0)
+    L_if_flux = jnp.array(0.0)
+    n_if = len(mpinn.interface_pairs)
+    
+    if n_if > 0:
+        for pts, n, (i, j) in zip(
+            mpinn.interface_pts, mpinn.interface_n, mpinn.interface_pairs,
+        ):
+            cont_T, cont_flux = interface_loss(mpinn.pinns[i], mpinn.pinns[j], pts, n)
+            L_if_T = L_if_T + cont_T
+            L_if_flux = L_if_flux + cont_flux
+            
+        L_if_T = L_if_T / n_if
+        L_if_flux = L_if_flux / n_if
+
+    # 6 компонентов потерь
+    losses_vec = jnp.array([L_pde, L_dir, L_neu, L_rob, L_if_T, L_if_flux])
     total = jnp.dot(mpinn.weights, losses_vec)
 
-    return total, (L_pde, L_bc_total, L_dir, L_neu, L_rob, L_if)
+    # 7 элементов в aux (для логов)
+    return total, (L_pde, L_bc_total, L_dir, L_neu, L_rob, L_if_T, L_if_flux)
 
 
 # ============================================================ оптимизация
@@ -168,7 +189,7 @@ def snapshot(mpinn):
 @eqx.filter_jit
 def train_step(mpinn, txs, opt_states, x_collocations, bc_configs,
                source_fns=()):
-    """Шаг обучения. Веса берутся из полей mpinn."""
+    """Шаг обучения."""
     n = len(mpinn.pinns)
     if len(txs) != n or len(opt_states) != n:
         raise ValueError(
@@ -177,10 +198,10 @@ def train_step(mpinn, txs, opt_states, x_collocations, bc_configs,
         )
 
     def closure(m):
-        total, (L_pde, L_bc, L_dir, L_neu, L_rob, L_if) = mpinn_loss_fn(
+        total, (L_pde, L_bc, L_dir, L_neu, L_rob, L_if_T, L_if_flux) = mpinn_loss_fn(
             m, x_collocations, bc_configs, source_fns,
         )
-        return total, (L_pde, L_bc, L_dir, L_neu, L_rob, L_if)
+        return total, (L_pde, L_bc, L_dir, L_neu, L_rob, L_if_T, L_if_flux)
 
     (total, aux), grads = eqx.filter_value_and_grad(closure, has_aux=True)(mpinn)
 
@@ -226,10 +247,7 @@ def predict(mpinn, geometries, x_test):
 
 
 def evaluate(mpinn, geometries, x_test, exact_fn):
-    """Оценка модели: (metrics, T_pred, T_exact).
-
-    Ошибка, если тестовые точки не попали ни в один домен.
-    """
+    """Оценка модели: (metrics, T_pred, T_exact)."""
     t_pred = predict(mpinn, geometries, x_test).ravel()
     n_nan = int(jnp.sum(jnp.isnan(t_pred)))
     if n_nan > 0:
@@ -245,37 +263,34 @@ def evaluate(mpinn, geometries, x_test, exact_fn):
 
 def fit(mpinn, txs, opt_states, x_collocations, bc_configs, epochs,
         source_fns=(), log_interval=100, print_log=False, step_offset=0):
-    """Базовый цикл обучения MPINN.
-
-    history: steps, total_loss, pde, bc_total, bc_dir, bc_neu, bc_rob, if_total.
-    """
-    history = {k: [] for k in (
-        "steps", "total_loss", "pde", "bc_total",
-        "bc_dir", "bc_neu", "bc_rob", "if_total",
-    )}
+    """Базовый цикл обучения MPINN."""
     t0 = time.perf_counter()
+
+    history = {
+        "steps": [],
+        "total_loss": [],
+        "loss_components": []
+    }
 
     for step in range(epochs):
         mpinn, opt_states, total, aux = train_step(
             mpinn, txs, opt_states, x_collocations, bc_configs, source_fns,
         )
+        
         if step % log_interval == 0 or step == epochs - 1:
-            L_pde, L_bc, L_dir, L_neu, L_rob, L_if = [float(v) for v in aux]
+            aux_tuple = tuple(float(v) for v in aux)
+            
             history["steps"].append(step_offset + step)
             history["total_loss"].append(float(total))
-            history["pde"].append(L_pde)
-            history["bc_total"].append(L_bc)
-            history["bc_dir"].append(L_dir)
-            history["bc_neu"].append(L_neu)
-            history["bc_rob"].append(L_rob)
-            history["if_total"].append(L_if)
+            history["loss_components"].append(aux_tuple)
 
             if print_log:
+                L_pde, L_bc, L_dir, L_neu, L_rob, L_if_T, L_if_flux = aux_tuple
                 print(f"step {step_offset + step:6d} | "
                       f"total={float(total):.3e}  "
                       f"pde={L_pde:.3e}  "
                       f"bc={L_bc:.3e} (dir={L_dir:.2e} neu={L_neu:.2e} rob={L_rob:.2e})  "
-                      f"if={L_if:.3e}")
+                      f"if_T={L_if_T:.3e}  if_flux={L_if_flux:.3e}")
 
     return mpinn, opt_states, history, time.perf_counter() - t0
 
@@ -290,7 +305,8 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, bc_configs,
         raise ValueError(f"block_epochs must be > 0, got {block_epochs}")
 
     t0 = time.perf_counter()
-    history = {}
+    history = {"steps": [], "total_loss": [], "loss_components": []}
+    
     total_epochs = 0
     best_metric = float("inf")
     best_mpinn, best_states, best_epoch, no_improve = mpinn, opt_states, 0, 0
@@ -305,7 +321,10 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, bc_configs,
         total_epochs += block
 
         for k, v in block_h.items():
-            history.setdefault(k, []).extend(v)
+            if k in history:
+                history[k].extend(v)
+            else:
+                history[k] = v
 
         metrics_dict, _, _ = evaluate(mpinn, geometries, x_test, exact_fn)
         current_metric = float(metrics_dict[metric_key])
@@ -316,11 +335,18 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, bc_configs,
         else:
             no_improve += 1
 
+        last_aux = block_h["loss_components"][-1]
+        pde_val = last_aux[0]
+        bc_val = last_aux[1]
+        if_T_val = last_aux[5]
+        if_flux_val = last_aux[6]
+
         print(f"[block {total_epochs:6d}] "
               f"{metric_key.upper()}={current_metric:.4e}  "
-              f"pde={history['pde'][-1]:.3e}  "
-              f"bc={history['bc_total'][-1]:.3e}  "
-              f"if={history['if_total'][-1]:.3e}  "
+              f"pde={pde_val:.3e}  "
+              f"bc={bc_val:.3e}  "
+              f"if_T={if_T_val:.3e}  "
+              f"if_flux={if_flux_val:.3e}  "
               f"(best={best_metric:.4e} @ {best_epoch}, "
               f"patience={no_improve}/{patience})")
 
@@ -338,21 +364,18 @@ def fit_adaptive(mpinn, txs, opt_states, x_collocations, bc_configs,
 def fit_adaptive_weights(mpinn, txs, opt_states, x_collocations, bc_configs,
                          geometries, x_test, exact_fn,
                          target_metric=1e-3, metric_key='rl2',
-                         block_epochs=500, max_epochs=50_000,
-                         log_interval=500, patience=20,
+                         block_epochs=500, max_epochs=20_000,
+                         log_interval=500, patience=10,
                          smoothing=0.5, max_weight=1000.0):
-    """Адаптивное обучение MPINN с loss-ratio балансировкой весов BC/IF.
-
-    w_pde фиксирован = 1.0.
-    w_dir, w_neu, w_rob, w_if ← smoothing·w + (1-smoothing)·L_*/L_pde.
-    """
+    """Адаптивное обучение MPINN с балансировкой 6 весов."""
     if block_epochs <= 0:
         raise ValueError(f"block_epochs must be > 0, got {block_epochs}")
     if not (0.0 <= smoothing <= 1.0):
         raise ValueError(f"smoothing must be in [0, 1], got {smoothing}")
 
     t0 = time.perf_counter()
-    history = {}
+    history = {"steps": [], "total_loss": [], "loss_components": []}
+    
     total_epochs = 0
     best_metric = float("inf")
     best_mpinn, best_states, best_epoch, no_improve = mpinn, opt_states, 0, 0
@@ -368,18 +391,25 @@ def fit_adaptive_weights(mpinn, txs, opt_states, x_collocations, bc_configs,
         total_epochs += block
 
         for k, v in block_h.items():
-            history.setdefault(k, []).extend(v)
+            if k in history:
+                history[k].extend(v)
+            else:
+                history[k] = v
 
         # --- обновление весов (PDE-anchored) ---
-        l_pde = history["pde"][-1]
+        last_aux = block_h["loss_components"][-1]
+        l_pde = last_aux[0]
         if not math.isfinite(l_pde) or l_pde <= 0:
             l_pde = 1e-6
+            
         raw = [
-            history["bc_dir"][-1]   / l_pde,
-            history["bc_neu"][-1]   / l_pde,
-            history["bc_rob"][-1]   / l_pde,
-            history["if_total"][-1] / l_pde,
+            last_aux[2] / l_pde,  # dir
+            last_aux[3] / l_pde,  # neu
+            last_aux[4] / l_pde,  # rob
+            last_aux[5] / l_pde,  # if_T
+            last_aux[6] / l_pde,  # if_flux
         ]
+        
         w_old = [float(v) for v in mpinn.weights[1:]]
         w_new = [
             max(lo, min(hi, smoothing * w + (1.0 - smoothing) * r))

@@ -61,6 +61,10 @@ def save_plot(
     plt.savefig(save_path, dpi=72, bbox_inches="tight")
     plt.close()
 
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+
 def show_history(
     history,
     labels=None,
@@ -72,53 +76,48 @@ def show_history(
     save_path=None,
 ):
     """Универсальная визуализация истории обучения.
-
-    history: dict[str, list[float] | np.ndarray]
-        Должен содержать 'steps' (x-ось). Остальные ключи — что рисовать.
-    labels: list[str] | None
-        None → все ключи, кроме 'steps'.
-        list → только эти ключи, в этом порядке.
-    logy: bool
-        Логарифмическая шкала по y. Отключайте, если среди значений есть <= 0.
-    save_path: str | None
-        Если задан — сохранить в файл.
-
-    Returns
-    -------
-    (fig, ax)
+    
+    labels: 
+        None -> рисует total_loss и все компоненты (Comp 0, Comp 1...)
+        list[str] -> рисует total_loss и компоненты по порядку (0, 1, ...)
+        dict[str, int] -> рисует total_loss и компоненты по указанным индексам
     """
     if "steps" not in history:
-        raise KeyError(
-            "history должен содержать 'steps'. "
-            "fit() всегда его пишет; проверьте, что вы передаёте history, "
-            "а не отдельный список."
-        )
+        raise KeyError("history должен содержать 'steps'.")
 
     steps = np.asarray(history["steps"])
-    n = len(steps)
-
-    if labels is None:
-        labels = [k for k in history if k != "steps"]
-
-    if not labels:
-        raise ValueError("Нет ключей для отображения.")
-
     fig, ax = plt.subplots(figsize=figsize)
 
-    for label in labels:
-        if label not in history:
-            raise KeyError(
-                f"history не содержит ключ {label!r}. "
-                f"Доступные: {sorted(k for k in history if k != 'steps')}"
-            )
-        values = np.asarray(history[label])
-        if len(values) != n:
-            raise ValueError(
-                f"Длина history[{label!r}] = {len(values)} "
-                f"не совпадает с длиной 'steps' = {n}."
-            )
-        ax.plot(steps, values, label=label, linewidth=2)
+    # 1. Рисуем total_loss (всегда, если не переопределено)
+    if "total_loss" in history:
+        ax.plot(steps, history["total_loss"], label="total_loss", linewidth=2, color='black')
 
+    # 2. Рисуем компоненты
+    if "loss_components" in history and len(history["loss_components"]) > 0:
+        comps = np.array(history["loss_components"]) # (N, M)
+        
+        if labels is None:
+            # Рисуем все компоненты
+            for i in range(comps.shape[1]):
+                ax.plot(steps, comps[:, i], label=f"Comp {i}", linewidth=2)
+                
+        elif isinstance(labels, dict):
+            # Рисуем по индексам
+            for name, idx in labels.items():
+                if idx >= comps.shape[1]:
+                    raise ValueError(f"Индекс {idx} для {name} выходит за пределы (всего {comps.shape[1]})")
+                ax.plot(steps, comps[:, idx], label=name, linewidth=2)
+                
+        elif isinstance(labels, list):
+            # Рисуем по порядку
+            if len(labels) > comps.shape[1]:
+                raise ValueError(f"Передано {len(labels)} labels, но компонентов всего {comps.shape[1]}")
+            for i, name in enumerate(labels):
+                ax.plot(steps, comps[:, i], label=name, linewidth=2)
+        else:
+            raise TypeError("labels должен быть None, list или dict")
+
+    # Красивости
     if logy:
         ax.set_yscale("log")
 

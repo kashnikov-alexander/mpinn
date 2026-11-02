@@ -37,24 +37,14 @@ def snapshot(pinn: PINN) -> PINN:
 
 def fit(pinn, tx, opt_state, x_collocation, bc_configs, epochs,
         source_fn=0.0, log_interval=100, print_log=False, step_offset=0):
-    """Базовый цикл обучения на epochs шагов.
-
-    Returns
-    -------
-    (pinn, opt_state, history, elapsed_seconds)
-
-    history: dict[str, list]
-        'steps', 'total_loss', 'pde', 'bc_total',
-        далее — по одному ключу на BC (classic: 'bc_i') или
-        на тип BC (split: 'bc_dir', 'bc_neu', 'bc_rob').
-    """
     start_time = time.perf_counter()
 
-    n_bc = len(bc_configs)
-    loss_names = ["pde", "bc_total"] + [f"bc_{i}" for i in range(n_bc)]
-    history = {"steps": [], "total_loss": []}
-    for name in loss_names:
-        history[name] = []
+    # Новая универсальная история
+    history = {
+        "steps": [],
+        "total_loss": [],
+        "loss_components": []  # Список кортежей/массивов
+    }
 
     for step in range(epochs):
         pinn, opt_state, total_loss, aux = train_step(
@@ -62,31 +52,14 @@ def fit(pinn, tx, opt_state, x_collocation, bc_configs, epochs,
         )
 
         if step % log_interval == 0 or step == epochs - 1:
-            if isinstance(aux, tuple):
-                pde_val = float(aux[0])
-                bc_vals = [float(v) for v in aux[1:]]
-                bc_keys = [f"bc_{i}" for i in range(len(bc_vals))]
-            else:  # split: [pde, dir, neu, rob]
-                arr = [float(v) for v in aux]
-                pde_val = arr[0]
-                bc_vals = arr[1:]
-                bc_keys = ["bc_dir", "bc_neu", "bc_rob"]
-
-            bc_total = float(sum(bc_vals)) if bc_vals else 0.0
-            total_val = float(total_loss)
-
             history["steps"].append(step_offset + step)
-            history["total_loss"].append(total_val)
-            history["pde"].append(pde_val)
-            history["bc_total"].append(bc_total)
-            for key, val in zip(bc_keys, bc_vals):
-                history[key].append(val)
+            history["total_loss"].append(float(total_loss))
+            
+            # Сохраняем сырые значения из aux (работает и для tuple, и для jnp.array)
+            history["loss_components"].append(tuple(float(v) for v in aux))
 
             if print_log:
-                line = f"\rstep: {step_offset + step} | PDE: {pde_val:.4f} | BC: {bc_total:.4f}"
-                for key, v in zip(bc_keys, bc_vals):
-                    line += f" | {key}: {v:.4f}"
-                print(line.ljust(120))
+                print(f"\rstep: {step_offset + step} | total: {float(total_loss):.4f} | aux: {history['loss_components'][-1]}".ljust(120))
 
     return pinn, opt_state, history, time.perf_counter() - start_time
 
@@ -99,7 +72,9 @@ def fit_adaptive(pinn, tx, opt_state, x_collocation, bc_configs,
     MAX_PATIENCE = 10
     start_time = time.perf_counter()
 
-    history: dict[str, list] = {}
+    # Универсальная история
+    history = {"steps": [], "total_loss": [], "loss_components": []}
+    
     total_epochs = 0
     best_metric = float("inf")
     best_snapshot = snapshot(pinn)
@@ -117,8 +92,12 @@ def fit_adaptive(pinn, tx, opt_state, x_collocation, bc_configs,
         )
         total_epochs += block
 
+        # Слияние историй
         for key, values in block_history.items():
-            history.setdefault(key, []).extend(values)
+            if key in history:
+                history[key].extend(values)
+            else:
+                history[key] = values
 
         metrics_dict, _, _ = evaluate(pinn, x_test, exact_fn)
         current_metric = float(metrics_dict[metric_key])
@@ -131,8 +110,10 @@ def fit_adaptive(pinn, tx, opt_state, x_collocation, bc_configs,
         else:
             patience_counter += 1
 
-        pde_val = block_history.get("pde", [float("nan")])[-1]
-        bc_val  = block_history.get("bc_total", [float("nan")])[-1]
+        # Вытаскиваем потери для логов из последнего блока
+        last_aux = block_history["loss_components"][-1] if block_history["loss_components"] else ()
+        pde_val = last_aux[0] if len(last_aux) > 0 else float("nan")
+        bc_val = sum(last_aux[1:]) if len(last_aux) > 1 else float("nan")
 
         print(f"[block {total_epochs:6d}] "
               f"{metric_key.upper()}={current_metric:.4f}  "
@@ -163,18 +144,13 @@ def fit_adaptive_weights(pinn, tx, opt_state, x_collocation, bc_configs,
 
     Требует:
         loss_fn = loss_fn_split_bc (weights длины 4: pde, dir, neu, rob);
-        history с ключами 'pde', 'bc_dir', 'bc_neu', 'bc_rob'.
-
-    weights[0] (PDE) фиксируется = 1.0.
-    Веса в history не пишутся — только в print.
-    x_test/exact_fn → early-stop по метрике.
+        history с ключами 'pde', 'bc_dir', 'bc_neu', 'bc_rob' (теперь через loss_components).
     """
     n_w = int(len(pinn.weights))
     if n_w != 4:
         raise ValueError(
             f"fit_adaptive_weights ожидает weights длины 4 "
             f"(pde, dir, neu, rob), получено {n_w}. "
-            f"Для другого лосса напишите свою fit_adaptive_weights."
         )
     if not (0.0 <= smoothing <= 1.0):
         raise ValueError(f"smoothing must be in [0, 1], got {smoothing}")
@@ -182,7 +158,9 @@ def fit_adaptive_weights(pinn, tx, opt_state, x_collocation, bc_configs,
     use_early_stop = (x_test is not None and exact_fn is not None)
     start_time = time.perf_counter()
 
-    history: dict[str, list] = {}
+    # Универсальная история
+    history = {"steps": [], "total_loss": [], "loss_components": []}
+    
     total_epochs = 0
     best_metric = float("inf")
     best_snapshot = snapshot(pinn)
@@ -202,17 +180,26 @@ def fit_adaptive_weights(pinn, tx, opt_state, x_collocation, bc_configs,
         )
         total_epochs += block
 
+        # Слияние историй
         for key, values in block_history.items():
-            history.setdefault(key, []).extend(values)
+            if key in history:
+                history[key].extend(values)
+            else:
+                history[key] = values
 
         # --- обновление весов BC (PDE-anchored) ---
-        l_pde = float(block_history["pde"][-1])
+        last_aux = block_history["loss_components"][-1]  # (pde, dir, neu, rob)
+        l_pde = last_aux[0]
+        
         if not jnp.isfinite(l_pde) or l_pde <= 0:
             l_pde = 1e-6
+            
         raw = [
-            float(block_history[k][-1]) / l_pde
-            for k in ("bc_dir", "bc_neu", "bc_rob")
+            last_aux[1] / l_pde,  # dir
+            last_aux[2] / l_pde,  # neu
+            last_aux[3] / l_pde,  # rob
         ]
+        
         w_old = [float(v) for v in pinn.weights[1:]]
         w_bc = [
             max(lo, min(hi, smoothing * w + (1.0 - smoothing) * r))

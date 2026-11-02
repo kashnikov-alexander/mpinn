@@ -23,7 +23,6 @@ from jax.nn.initializers import glorot_normal
 # ============================================================ сети
 
 class FCNet(eqx.Module):
-    """Полносвязная сеть. (din,) -> (dout,) или (N, din) -> (N, dout)."""
     layers: list
     linear_out: eqx.nn.Linear
     activation: Callable = eqx.field(static=True)
@@ -39,23 +38,40 @@ class FCNet(eqx.Module):
         weight_init: Callable | None = None,
         bias_init: Callable | None = None,
     ):
+        # 1. Задаем дефолтные JAX-инициализаторы
         if weight_init is None:
             weight_init = glorot_normal(in_axis=-1, out_axis=-2)
         if bias_init is None:
             bias_init = jax.nn.initializers.zeros
 
         keys = jax.random.split(key, num_layers + 1)
-        self.layers = [
-            eqx.nn.Linear(
-                din if i == 0 else dmid, dmid, key=keys[i],
-                weight_init=weight_init, bias_init=bias_init,
-            )
-            for i in range(num_layers)
-        ]
-        self.linear_out = eqx.nn.Linear(
-            dmid, dout, key=keys[-1],
-            weight_init=weight_init, bias_init=bias_init,
-        )
+        
+        # 2. Создаем слои
+        self.layers = []
+        for i in range(num_layers):
+            # Создаем слой (Equinox инициализирует его по своему, нам это не важно, мы перезапишем)
+            layer = eqx.nn.Linear(din if i == 0 else dmid, dmid, key=keys[i])
+            
+            # 3. Применяем наши JAX-инициализаторы
+            # ВАЖНО: JAX-инициализатору нужен свой ключ и форма весов (layer.weight.shape)
+            w_key, b_key = jax.random.split(keys[i])
+            new_w = weight_init(w_key, layer.weight.shape)
+            new_b = bias_init(b_key, layer.bias.shape)
+            
+            # 4. Заменяем веса в слое
+            layer = eqx.tree_at(lambda l: l.weight, layer, new_w)
+            layer = eqx.tree_at(lambda l: l.bias, layer, new_b)
+            self.layers.append(layer)
+
+        # То же самое для выходного слоя
+        self.linear_out = eqx.nn.Linear(dmid, dout, key=keys[-1])
+        w_key, b_key = jax.random.split(keys[-1])
+        new_w = weight_init(w_key, self.linear_out.weight.shape)
+        new_b = bias_init(b_key, self.linear_out.bias.shape)
+        
+        self.linear_out = eqx.tree_at(lambda l: l.weight, self.linear_out, new_w)
+        self.linear_out = eqx.tree_at(lambda l: l.bias, self.linear_out, new_b)
+        
         self.activation = activation
 
     def _forward_one(self, x):
