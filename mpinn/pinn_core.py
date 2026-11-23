@@ -20,7 +20,6 @@ import jax.numpy as jnp
 from jax.nn.initializers import glorot_normal
 
 
-# ============================================================ сети
 class FCNet(eqx.Module):
     layers: list
     linear_out: eqx.nn.Linear
@@ -120,9 +119,6 @@ def dimensionless(scale):
     return decorator
 
 
-# ============================================================ PINN
-
-
 class PINN(eqx.Module):
     """Контейнер модели.
 
@@ -186,9 +182,6 @@ def train_step(pinn: PINN, tx, opt_state, x_collocation, bc_configs, source_fn=0
     updates, new_opt_state = tx.update(grads, opt_state, params)
     new_pinn = eqx.apply_updates(pinn, updates)
     return new_pinn, new_opt_state, total, aux
-
-
-# ============================================================ оценка
 
 
 def compute_metrics(T_pred, T_exact):

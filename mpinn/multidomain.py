@@ -21,8 +21,6 @@ from .bc import _lambda_vals
 from .losses import loss_fn_split_bc
 from .pinn_core import compute_metrics
 
-# ============================================================ MPINN
-
 
 class MPINN(eqx.Module):
     """Только поля: список PINN + геометрия интерфейсов + веса лоссов."""
@@ -81,8 +79,6 @@ class MPINN(eqx.Module):
         return self.weights[1] + self.weights[2] + self.weights[3]
 
 
-# ============================================================ interface loss
-
 
 def interface_loss(pinn_i, pinn_j, pts, n):
     """Возвращает (continuity_T, continuity_flux) на одном интерфейсе.
@@ -105,9 +101,6 @@ def interface_loss(pinn_i, pinn_j, pts, n):
     cont_flux = jnp.mean((lam_i * dT1n + lam_j * dT2n) ** 2)
 
     return cont_T, cont_flux
-
-
-# ============================================================ loss
 
 
 def mpinn_loss_fn(mpinn, x_collocations, bc_configs, source_fns=()):
@@ -178,9 +171,6 @@ def mpinn_loss_fn(mpinn, x_collocations, bc_configs, source_fns=()):
     return total, (L_pde, L_bc_total, L_dir, L_neu, L_rob, L_if_T, L_if_flux)
 
 
-# ============================================================ оптимизация
-
-
 def init_opt_states(mpinn, txs):
     if len(txs) != len(mpinn.pinns):
         raise ValueError(f"len(txs)={len(txs)} != len(mpinn.pinns)={len(mpinn.pinns)}")
@@ -227,9 +217,6 @@ def train_step(mpinn, txs, opt_states, x_collocations, bc_configs, source_fns=()
     return new_mpinn, tuple(new_states), total, aux
 
 
-# ============================================================ predict / evaluate
-
-
 @eqx.filter_jit
 def predict(mpinn, geometries, x_test):
     """Предсказание по доменам с маскировкой."""
@@ -267,9 +254,6 @@ def evaluate(mpinn, geometries, x_test, exact_fn):
         )
     t_exact = exact_fn(x_test).ravel()
     return compute_metrics(t_pred, t_exact), t_pred, t_exact
-
-
-# ============================================================ fit
 
 
 def fit(
