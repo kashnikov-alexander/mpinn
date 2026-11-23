@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import equinox as eqx
 import jax
@@ -21,7 +21,6 @@ from jax.nn.initializers import glorot_normal
 
 
 # ============================================================ сети
-
 class FCNet(eqx.Module):
     layers: list
     linear_out: eqx.nn.Linear
@@ -45,19 +44,19 @@ class FCNet(eqx.Module):
             bias_init = jax.nn.initializers.zeros
 
         keys = jax.random.split(key, num_layers + 1)
-        
+
         # 2. Создаем слои
         self.layers = []
         for i in range(num_layers):
             # Создаем слой (Equinox инициализирует его по своему, нам это не важно, мы перезапишем)
             layer = eqx.nn.Linear(din if i == 0 else dmid, dmid, key=keys[i])
-            
+
             # 3. Применяем наши JAX-инициализаторы
             # ВАЖНО: JAX-инициализатору нужен свой ключ и форма весов (layer.weight.shape)
             w_key, b_key = jax.random.split(keys[i])
             new_w = weight_init(w_key, layer.weight.shape)
             new_b = bias_init(b_key, layer.bias.shape)
-            
+
             # 4. Заменяем веса в слое
             layer = eqx.tree_at(lambda l: l.weight, layer, new_w)
             layer = eqx.tree_at(lambda l: l.bias, layer, new_b)
@@ -68,10 +67,10 @@ class FCNet(eqx.Module):
         w_key, b_key = jax.random.split(keys[-1])
         new_w = weight_init(w_key, self.linear_out.weight.shape)
         new_b = bias_init(b_key, self.linear_out.bias.shape)
-        
+
         self.linear_out = eqx.tree_at(lambda l: l.weight, self.linear_out, new_w)
         self.linear_out = eqx.tree_at(lambda l: l.bias, self.linear_out, new_b)
-        
+
         self.activation = activation
 
     def _forward_one(self, x):
@@ -88,17 +87,18 @@ class FCNet(eqx.Module):
 
 class ScaledNet(eqx.Module):
     """Нормирует вход (координаты) в [0, 1] и выход θ -> T."""
+
     base: eqx.Module
     x_min: jax.Array
     x_max: jax.Array
-    T_ref:   float = eqx.field(static=True)
+    T_ref: float = eqx.field(static=True)
     T_scale: float = eqx.field(static=True)
 
     def __init__(self, base, x_min, x_max, T_ref=0.0, T_scale=1.0):
         self.base = base
         self.x_min = jnp.asarray(x_min, dtype=jnp.float32)
         self.x_max = jnp.asarray(x_max, dtype=jnp.float32)
-        self.T_ref   = float(T_ref)
+        self.T_ref = float(T_ref)
         self.T_scale = float(T_scale)
 
     def __call__(self, x):
@@ -109,15 +109,19 @@ class ScaledNet(eqx.Module):
 
 def dimensionless(scale):
     """Декоратор: умножает результат функции на масштабный коэффициент."""
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs) * scale
+
         return wrapper
+
     return decorator
 
 
 # ============================================================ PINN
+
 
 class PINN(eqx.Module):
     """Контейнер модели.
@@ -126,10 +130,11 @@ class PINN(eqx.Module):
         Контракт по len(weights) задаёт сам loss_fn (см. losses.py).
     weights: jax.Array любой длины; семантику задаёт loss_fn.
     """
+
     net: eqx.Module
 
     lam_val: jax.Array
-    lam_fn: Optional[Callable] = eqx.field(static=True)
+    lam_fn: Callable | None = eqx.field(static=True)
 
     weights: jax.Array
 
@@ -168,11 +173,10 @@ class PINN(eqx.Module):
         return self.net(x)
 
 
-# ============================================================ один шаг
-
 @eqx.filter_jit
 def train_step(pinn: PINN, tx, opt_state, x_collocation, bc_configs, source_fn=0.0):
     """Один шаг обучения. bc_configs — статический tuple, не поле PINN."""
+
     def closure(p):
         return p.loss_fn(p, x_collocation, bc_configs, source_fn)
 
@@ -186,10 +190,11 @@ def train_step(pinn: PINN, tx, opt_state, x_collocation, bc_configs, source_fn=0
 
 # ============================================================ оценка
 
+
 def compute_metrics(T_pred, T_exact):
     """Метрики от двух массивов. Все значения — Python float."""
     diff = T_pred - T_exact
-    mse_jnp = jnp.mean(diff ** 2)
+    mse_jnp = jnp.mean(diff**2)
     mse = float(mse_jnp)
     rmse = float(jnp.sqrt(mse_jnp))
     mae = float(jnp.mean(jnp.abs(diff)))
@@ -197,12 +202,12 @@ def compute_metrics(T_pred, T_exact):
     mape = float(jnp.mean(jnp.abs(diff / (jnp.abs(T_exact) + 1e-8))))
     rl2 = float(jnp.linalg.norm(diff) / (jnp.linalg.norm(T_exact) + 1e-12))
     return {
-        "rl2":       rl2,
-        "mape":      mape,
+        "rl2": rl2,
+        "mape": mape,
         "max_error": max_error,
-        "mae":       mae,
-        "mse":       mse,
-        "rmse":      rmse,
+        "mae": mae,
+        "mse": mse,
+        "rmse": rmse,
     }
 
 

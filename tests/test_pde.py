@@ -8,6 +8,7 @@ from mpinn.utils import PhysicsParams
 
 phys = PhysicsParams(_lambda=1.0, T_min=0.0, T_max=1.0)
 
+
 class TestLine1D:
     """Test cases for 1D line (Cartesian) PDE."""
 

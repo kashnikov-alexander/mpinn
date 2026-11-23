@@ -69,19 +69,12 @@ def beta(self):
 from mpinn.config import PhysicsParams
 
 # Создание объекта с параметрами по умолчанию
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T_inf=500.0,
-    _lambda=1.0,
-    h=10.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T_inf=500.0, _lambda=1.0, h=10.0)
 
 # Доступ к свойствам условия Робина
-alpha = phys.alpha_right   # 10.0
-beta = phys.beta     # 1.0
-gamma = phys.gamma   # 5000.0
+alpha = phys.alpha_right  # 10.0
+beta = phys.beta  # 1.0
+gamma = phys.gamma  # 5000.0
 ```
 
 ---
@@ -121,8 +114,8 @@ config = TrainConfig()
 config = TrainConfig(
     hidden_features=128,
     num_layers=4,
-    activation_name='tanh',
-    opt_name='adam',
+    activation_name="tanh",
+    opt_name="adam",
     lr=0.001,
     max_epochs=5000,
     patience=300,
@@ -130,7 +123,7 @@ config = TrainConfig(
     num_points=200,
     weights=(1.0, 2.0, 2.0),
     save_img=True,
-    image_path='results/solution.png'
+    image_path="results/solution.png",
 )
 ```
 
@@ -162,10 +155,10 @@ get_activation(name: str)
 from mpinn.config import get_activation
 import flax.nnx as nnx
 
-tanh_fn = get_activation('tanh')      # nnx.tanh
-gelu_fn = get_activation('GELU')      # nnx.gelu
-relu_fn = get_activation('ReLU')      # nnx.relu
-sin_fn = get_activation('sin')        # jnp.sin
+tanh_fn = get_activation("tanh")  # nnx.tanh
+gelu_fn = get_activation("GELU")  # nnx.gelu
+relu_fn = get_activation("ReLU")  # nnx.relu
+sin_fn = get_activation("sin")  # jnp.sin
 ```
 
 ---
@@ -194,9 +187,9 @@ get_optimizer(name: str, lr: float)
 ```python
 from mpinn.config import get_optimizer
 
-adam_opt = get_optimizer('adam', lr=0.001)
-sgd_opt = get_optimizer('sgd', lr=0.01)
-rmsprop_opt = get_optimizer('rmsprop', lr=0.005)
+adam_opt = get_optimizer("adam", lr=0.001)
+sgd_opt = get_optimizer("sgd", lr=0.01)
+rmsprop_opt = get_optimizer("rmsprop", lr=0.005)
 ```
 
 ---
@@ -209,12 +202,12 @@ rmsprop_opt = get_optimizer('rmsprop', lr=0.005)
 
 ```python
 DEFAULT_PHYSICS = {
-    'x0': 0.0,
-    'x1': 1.0,
-    'T0': 300.0,
-    'T_inf': 500.0,
-    '_lambda': 1.0,
-    'h': 10.0,
+    "x0": 0.0,
+    "x1": 1.0,
+    "T0": 300.0,
+    "T_inf": 500.0,
+    "_lambda": 1.0,
+    "h": 10.0,
 }
 ```
 
@@ -224,16 +217,16 @@ DEFAULT_PHYSICS = {
 
 ```python
 DEFAULT_TRAIN_CONFIG = {
-    'hidden_features': 64,
-    'num_layers': 2,
-    'activation_name': 'GELU',
-    'opt_name': 'adam',
-    'lr': 0.01,
-    'max_epochs': 3000,
-    'patience': 200,
-    'min_delta': 1e-6,
-    'num_points': 100,
-    'weights': (1.0, 1.0, 1.0),
+    "hidden_features": 64,
+    "num_layers": 2,
+    "activation_name": "GELU",
+    "opt_name": "adam",
+    "lr": 0.01,
+    "max_epochs": 3000,
+    "patience": 200,
+    "min_delta": 1e-6,
+    "num_points": 100,
+    "weights": (1.0, 1.0, 1.0),
 }
 ```
 
@@ -248,26 +241,19 @@ from mpinn.geom import Interval
 import flax.nnx as nnx
 
 # 1. Физические параметры
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T_inf=500.0,
-    _lambda=1.0,
-    h=10.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T_inf=500.0, _lambda=1.0, h=10.0)
 
 # 2. Конфигурация обучения
 config = TrainConfig(
     hidden_features=64,
     num_layers=2,
-    activation_name='GELU',
-    opt_name='adam',
+    activation_name="GELU",
+    opt_name="adam",
     lr=0.01,
     max_epochs=3000,
     patience=200,
     num_points=100,
-    weights=(1.0, 1.0, 1.0)
+    weights=(1.0, 1.0, 1.0),
 )
 
 # 3. Создание модели
@@ -280,7 +266,7 @@ net = FCNet(
     dout=1,
     num_layers=config.num_layers,
     activation=act_fn,
-    rngs=nnx.Rngs(0)
+    rngs=nnx.Rngs(0),
 )
 
 pinn = PINN(net, opt=optimizer, weights=config.weights)

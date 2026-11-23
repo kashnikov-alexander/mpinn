@@ -13,14 +13,19 @@
 """
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 import jax.numpy as jnp
-from .bc import DirichletBC, NeumannBC, RobinBC, AdiabaticBC
+
+from .bc import AdiabaticBC, DirichletBC, NeumannBC, RobinBC
+
 if TYPE_CHECKING:
     from .pinn_core import PINN
 
 
 # ============================================================ лоссы
+
 
 def loss_fn(pinn: PINN, x_collocation, bc_configs, source_fn=0.0):
     """Классическая функция потерь: все BC в одну кучу.
@@ -29,12 +34,9 @@ def loss_fn(pinn: PINN, x_collocation, bc_configs, source_fn=0.0):
     Возвращает (total, (loss_pde, *loss_bcs)).
     """
     residuals_pde = pinn.pde_fn(pinn.net, x_collocation, pinn.lam, source_fn)
-    loss_pde = jnp.mean(residuals_pde ** 2)
+    loss_pde = jnp.mean(residuals_pde**2)
 
-    loss_bcs = [
-        jnp.mean(bc.residual(pinn.net, pinn.lam) ** 2)
-        for bc in bc_configs
-    ]
+    loss_bcs = [jnp.mean(bc.residual(pinn.net, pinn.lam) ** 2) for bc in bc_configs]
     loss_bc_total = sum(loss_bcs) if loss_bcs else jnp.array(0.0)
     total = pinn.weights[0] * loss_pde + pinn.weights[1] * loss_bc_total
     return total, (loss_pde, *loss_bcs)
@@ -48,7 +50,7 @@ def loss_fn_split_bc(pinn: PINN, x_collocation, bc_configs, source_fn=0.0):
     Возвращает (total, jnp.array([loss_pde, loss_dir, loss_neu, loss_rob])).
     """
     residuals_pde = pinn.pde_fn(pinn.net, x_collocation, pinn.lam, source_fn)
-    loss_pde = jnp.mean(residuals_pde ** 2)
+    loss_pde = jnp.mean(residuals_pde**2)
 
     loss_dir = jnp.array(0.0)
     loss_neu = jnp.array(0.0)

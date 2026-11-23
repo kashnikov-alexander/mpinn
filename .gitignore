@@ -48,3 +48,5 @@ Thumbs.db
 *.tar.gz
 *.whl
 ```
+mpinn/training_new.txt
+mpinn/multidomain_new.txt

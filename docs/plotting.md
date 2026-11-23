@@ -17,13 +17,7 @@
 ### show_plot
 
 ```python
-show_plot(
-    x_test,
-    T_pred,
-    T_exact,
-    phys,
-    title="Сравнение PINN и точного решения"
-)
+show_plot(x_test, T_pred, T_exact, phys, title="Сравнение PINN и точного решения")
 ```
 
 Отображает график сравнения предсказания нейронной сети и точного аналитического решения.
@@ -62,12 +56,7 @@ show_plot(x_test, T_pred, T_exact, phys, title="Решение задачи те
 
 ```python
 save_plot(
-    x_test,
-    T_pred,
-    T_exact,
-    phys,
-    save_path,
-    title="Сравнение PINN и точного решения"
+    x_test, T_pred, T_exact, phys, save_path, title="Сравнение PINN и точного решения"
 )
 ```
 
@@ -90,9 +79,12 @@ save_plot(
 from mpinn.plotting import save_plot
 
 save_plot(
-    x_test, T_pred, T_exact, phys,
-    save_path='results/pinn_solution.png',
-    title="Сравнение PINN и аналитического решения"
+    x_test,
+    T_pred,
+    T_exact,
+    phys,
+    save_path="results/pinn_solution.png",
+    title="Сравнение PINN и аналитического решения",
 )
 ```
 
@@ -127,7 +119,7 @@ from mpinn.plotting import show_history
 history, _ = pinn.fit(x_collocation, pde_fn, bc_fns, phys, epochs=10000)
 
 # Показ истории обучения
-show_history(history, save_path='results/training_history.png', show_plot=True)
+show_history(history, save_path="results/training_history.png", show_plot=True)
 ```
 
 ---
@@ -172,21 +164,16 @@ import flax.nnx as nnx
 import optax
 
 # 1. Настройка
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0)
 
 config = TrainConfig(
     hidden_features=64,
     num_layers=2,
-    activation_name='GELU',
+    activation_name="GELU",
     lr=0.01,
     max_epochs=5000,
     patience=200,
-    num_points=100
+    num_points=100,
 )
 
 # 2. Создание модели
@@ -196,7 +183,7 @@ net = FCNet(
     dout=1,
     num_layers=config.num_layers,
     activation=nnx.gelu,
-    rngs=nnx.Rngs(0)
+    rngs=nnx.Rngs(0),
 )
 
 optimizer = optax.adam(config.lr)
@@ -216,7 +203,7 @@ history, training_time = pinn.fit(
     pde_fn=line_1d,
     bc_fns=[bc_left, bc_right],
     phys=phys,
-    epochs=config.max_epochs
+    epochs=config.max_epochs,
 )
 
 # 6. Предсказание и оценка
@@ -230,20 +217,19 @@ print(f"MSE: {metrics['mse']:.6e}, MAE: {metrics['mae']:.6e}")
 # 7. Визуализация результатов
 # Сохранение графика решения
 save_plot(
-    x_test, T_pred, T_exact, phys,
-    save_path='results/solution.png',
-    title="Решение задачи теплопроводности"
+    x_test,
+    T_pred,
+    T_exact,
+    phys,
+    save_path="results/solution.png",
+    title="Решение задачи теплопроводности",
 )
 
 # Показ графика решения
 show_plot(x_test, T_pred, T_exact, phys, title="PINN vs Аналитическое решение")
 
 # Сохранение и показ истории обучения
-show_history(
-    history,
-    save_path='results/training_history.png',
-    show_plot=True
-)
+show_history(history, save_path="results/training_history.png", show_plot=True)
 ```
 
 ---
@@ -267,9 +253,12 @@ T_exact = exact_fn(x_test, phys)
 
 # Визуализация (интерфейсы будут отмечены автоматически)
 save_plot(
-    x_test, T_pred, T_exact, phys,
-    save_path='results/mpinn_solution.png',
-    title="MPINN: Многослойная задача"
+    x_test,
+    T_pred,
+    T_exact,
+    phys,
+    save_path="results/mpinn_solution.png",
+    title="MPINN: Многослойная задача",
 )
 ```
 
@@ -281,14 +270,15 @@ save_plot(
 
 ```python
 # Автоматическое создание директории results/plots/
-show_history(history, save_path='results/plots/history.png')
+show_history(history, save_path="results/plots/history.png")
 
 # Проверка существования пути
 import os
-if not os.path.exists('results'):
-    os.makedirs('results')
-    
-save_plot(x_test, T_pred, T_exact, phys, save_path='results/solution.png')
+
+if not os.path.exists("results"):
+    os.makedirs("results")
+
+save_plot(x_test, T_pred, T_exact, phys, save_path="results/solution.png")
 ```
 
 ---
@@ -299,10 +289,10 @@ save_plot(x_test, T_pred, T_exact, phys, save_path='results/solution.png')
 
 ```python
 # Для презентаций (высокое DPI)
-plt.savefig('solution_hd.png', dpi=300, bbox_inches='tight')
+plt.savefig("solution_hd.png", dpi=300, bbox_inches="tight")
 
 # Для веба (низкое DPI)
-plt.savefig('solution_web.png', dpi=72, bbox_inches='tight')
+plt.savefig("solution_web.png", dpi=72, bbox_inches="tight")
 ```
 
 ### Кастомизация графиков
@@ -313,13 +303,13 @@ plt.savefig('solution_web.png', dpi=72, bbox_inches='tight')
 import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots(figsize=(10, 6))
-ax.plot(x_test, T_exact, 'b-', label='Аналитическое', linewidth=2)
-ax.plot(x_test, T_pred, 'r--', label='PINN', linewidth=2)
-ax.set_xlabel('x, м', fontsize=12)
-ax.set_ylabel('T, К', fontsize=12)
+ax.plot(x_test, T_exact, "b-", label="Аналитическое", linewidth=2)
+ax.plot(x_test, T_pred, "r--", label="PINN", linewidth=2)
+ax.set_xlabel("x, м", fontsize=12)
+ax.set_ylabel("T, К", fontsize=12)
 ax.legend(fontsize=14)
 ax.grid(True, alpha=0.3)
-plt.savefig('custom_plot.png', dpi=150)
+plt.savefig("custom_plot.png", dpi=150)
 plt.show()
 ```
 

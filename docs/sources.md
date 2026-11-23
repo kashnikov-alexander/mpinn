@@ -51,13 +51,7 @@ from mpinn.sources import constant_source
 source_fn = constant_source(1000.0)
 
 # Использование в PhysicsParams
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0,
-    source_fn=source_fn
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0, source_fn=source_fn)
 ```
 
 ---
@@ -99,13 +93,7 @@ from mpinn.sources import gaussian_source
 # Гауссов источник с центром в 0.5 м, шириной 0.1 м, амплитудой 5000 Вт/м³
 source_fn = gaussian_source(center=0.5, width=0.1, amplitude=5000.0)
 
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0,
-    source_fn=source_fn
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0, source_fn=source_fn)
 ```
 
 ---
@@ -149,13 +137,7 @@ from mpinn.sources import point_source
 # Точечный источник в точке x=0.3 с мощностью 100 Вт
 source_fn = point_source(location=0.3, epsilon=0.01, amplitude=100.0)
 
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0,
-    source_fn=source_fn
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0, source_fn=source_fn)
 ```
 
 ---
@@ -184,25 +166,23 @@ custom_source(func: Callable[[Array], Array]) -> Callable[[Array], Array]
 from mpinn.sources import custom_source
 import jax.numpy as jnp
 
+
 # Линейно возрастающий источник
 def linear_source(x):
     return 1000.0 * x  # f(x) = 1000·x
 
+
 source_fn = custom_source(linear_source)
+
 
 # Или синусоидальный источник
 def sinusoidal_source(x):
     return 500.0 * jnp.sin(2 * jnp.pi * x)
 
+
 source_fn = custom_source(sinusoidal_source)
 
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0,
-    source_fn=source_fn
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0, source_fn=source_fn)
 ```
 
 ---
@@ -225,21 +205,10 @@ no_source() -> Callable[[Array], Array]
 from mpinn.sources import no_source
 
 # Явное указание отсутствия источника
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0,
-    source_fn=no_source()
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0, source_fn=no_source())
 
 # Эквивалентно (по умолчанию source_fn=None)
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T1=400.0)
 ```
 
 ---
@@ -264,7 +233,7 @@ phys1 = PhysicsParams(
     x1=1.0,
     T0=300.0,
     T1=400.0,
-    source_fn=constant_source(1000.0)  # 1000 Вт/м³
+    source_fn=constant_source(1000.0),  # 1000 Вт/м³
 )
 
 # === Пример 2: Гауссов источник ===
@@ -274,7 +243,7 @@ phys2 = PhysicsParams(
     x1=1.0,
     T0=300.0,
     T1=400.0,
-    source_fn=gaussian_source(center=0.5, width=0.1, amplitude=5000.0)
+    source_fn=gaussian_source(center=0.5, width=0.1, amplitude=5000.0),
 )
 
 # === Пример 3: Точечный источник ===
@@ -284,21 +253,19 @@ phys3 = PhysicsParams(
     x1=1.0,
     T0=300.0,
     T1=400.0,
-    source_fn=point_source(location=0.3, epsilon=0.01, amplitude=100.0)
+    source_fn=point_source(location=0.3, epsilon=0.01, amplitude=100.0),
 )
 
 # === Пример 4: Пользовательский источник ===
 
+
 def polynomial_source(x):
     """Квадратичный источник f(x) = 1000·(1 - x²)"""
-    return 1000.0 * (1.0 - x ** 2)
+    return 1000.0 * (1.0 - x**2)
+
 
 phys4 = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T1=400.0,
-    source_fn=custom_source(polynomial_source)
+    x0=0.0, x1=1.0, T0=300.0, T1=400.0, source_fn=custom_source(polynomial_source)
 )
 
 # === Обучение модели с источником ===
@@ -306,11 +273,11 @@ phys4 = PhysicsParams(
 config = TrainConfig(
     hidden_features=64,
     num_layers=2,
-    activation_name='GELU',
+    activation_name="GELU",
     lr=0.01,
     max_epochs=5000,
     patience=200,
-    num_points=150  # Больше точек для лучшего разрешения источника
+    num_points=150,  # Больше точек для лучшего разрешения источника
 )
 
 net = FCNet(
@@ -319,7 +286,7 @@ net = FCNet(
     dout=1,
     num_layers=config.num_layers,
     activation=nnx.gelu,
-    rngs=nnx.Rngs(0)
+    rngs=nnx.Rngs(0),
 )
 
 optimizer = optax.adam(config.lr)
@@ -336,7 +303,7 @@ history, training_time = pinn.fit(
     pde_fn=line_1d,  # line_1d автоматически учитывает source_fn из phys
     bc_fns=[bc_left, bc_right],
     phys=phys1,
-    epochs=config.max_epochs
+    epochs=config.max_epochs,
 )
 
 print(f"Обучение завершено за {training_time:.2f}c")
@@ -353,16 +320,16 @@ print(f"PDE потеря: {history['pde'][-1]:.6e}")
 # Из pde.py:line_1d
 def line_1d(model, x, phys):
     # ... вычисление второй производной ...
-    
+
     # Вычисляем источник если задан
     source_val = 0.0
-    if hasattr(phys, 'source_fn') and phys.source_fn is not None:
+    if hasattr(phys, "source_fn") and phys.source_fn is not None:
         source_val = phys.source_fn(x_flat)
-    
+
     # Невязка: d²T/dx² + f(x) = 0
     residual = d2T_dx2 + source_val
-    
-    return jnp.mean(residual ** 2)
+
+    return jnp.mean(residual**2)
 ```
 
 ---
@@ -413,10 +380,10 @@ source_fn = gaussian_source(center=0.5, width=0.1, amplitude=5000.0)
 f_values = source_fn(x)
 
 plt.figure(figsize=(8, 4))
-plt.plot(x, f_values, 'r-', linewidth=2)
-plt.xlabel('x, м')
-plt.ylabel('f(x), Вт/м³')
-plt.title('Распределение источника тепла')
+plt.plot(x, f_values, "r-", linewidth=2)
+plt.xlabel("x, м")
+plt.ylabel("f(x), Вт/м³")
+plt.title("Распределение источника тепла")
 plt.grid(True, alpha=0.3)
 plt.show()
 ```

@@ -165,7 +165,7 @@ fit(pde_fn, bc_left_fn, bc_right_fn, phys, epochs, log_interval=100)
 **Имена компонентов потерь:**
 
 ```python
-['pde_0', 'pde_1', ..., 'bc_left', 'bc_right', 'interface_0', 'interface_1', ...]
+["pde_0", "pde_1", ..., "bc_left", "bc_right", "interface_0", "interface_1", ...]
 ```
 
 ---
@@ -261,18 +261,20 @@ from multidomain import MPINN
 from pde import line_1d
 from bc import dirichlet_bc
 
+
 # Физические параметры для двухслойной стены
 class PhysicsMulti:
     x0 = 0.0
     x1 = 0.3
     interfaces = [0.1]  # Граница между слоями на x = 0.1 м
-    
+
     # Теплопроводности слоёв
     all_lambdas = [1.0, 0.5]  # Вт/(м·K)
-    
+
     # Граничные условия
     T0 = 300.0  # K
-    T1 = 400.0 # K
+    T1 = 400.0  # K
+
 
 phys = PhysicsMulti()
 
@@ -289,11 +291,7 @@ weights = [1.0, 1.0, 1.0, 1.0, 1.0]
 
 # Создание MPINN
 mpinn = MPINN(
-    nets=nets,
-    opt=optax.adam(1e-3),
-    weights=weights,
-    phys=phys,
-    n_collocation=100
+    nets=nets, opt=optax.adam(1e-3), weights=weights, phys=phys, n_collocation=100
 )
 
 # Граничные условия
@@ -302,11 +300,7 @@ bc_right = lambda m: dirichlet_bc(m, phys.x1, phys.T1)
 
 # Обучение
 history, training_time = mpinn.fit(
-    pde_fn=line_1d,
-    bc_left_fn=bc_left,
-    bc_right_fn=bc_right,
-    phys=phys,
-    epochs=10000
+    pde_fn=line_1d, bc_left_fn=bc_left, bc_right_fn=bc_right, phys=phys, epochs=10000
 )
 
 # Предсказание
@@ -315,6 +309,7 @@ T_pred = mpinn.predict(x_test)
 
 # Оценка (если есть аналитическое решение)
 from analytic import line_1d_dirichlet_exact
+
 metrics, T_pred, T_exact = mpinn.evaluate(x_test, line_1d_dirichlet_exact, phys)
 print(f"MAE: {metrics['mae']}, RMSE: {metrics['rmse']}")
 
@@ -329,10 +324,11 @@ class PhysicsThreeLayers:
     x0 = 0.0
     x1 = 0.3
     interfaces = [0.1, 0.2]  # Две границы раздела
-    
+
     all_lambdas = [1.0, 0.5, 2.0]  # Три слоя
     T0 = 300.0
     T1 = 400.0
+
 
 phys = PhysicsThreeLayers()
 
@@ -366,7 +362,7 @@ weights = [
     1.0,  # pde_1
     1.0,  # bc_left
     1.0,  # bc_right
-    1.0   # interface_0
+    1.0,  # interface_0
 ]
 ```
 
@@ -380,7 +376,7 @@ weights = [
     1.0,  # bc_left
     1.0,  # bc_right
     1.0,  # interface_0
-    1.0   # interface_1
+    1.0,  # interface_1
 ]
 ```
 

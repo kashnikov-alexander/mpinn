@@ -54,24 +54,17 @@ from mpinn.config import TrainConfig, PhysicsParams
 config = TrainConfig(
     hidden_features=64,
     num_layers=2,
-    activation_name='GELU',
+    activation_name="GELU",
     lr=0.01,
     max_epochs=3000,
     patience=200,
     num_points=100,
     weights=(1.0, 1.0, 1.0),
     save_img=True,
-    image_path='results/solution.png'
+    image_path="results/solution.png",
 )
 
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T_inf=500.0,
-    _lambda=1.0,
-    h=10.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T_inf=500.0, _lambda=1.0, h=10.0)
 
 # Запуск эксперимента
 metrics, history = run_experiment(config=config, phys=phys)
@@ -120,42 +113,31 @@ from mpinn.config import TrainConfig, PhysicsParams
 
 # Сетка параметров для перебора
 param_grid = {
-    'hidden_features': [32, 64, 128],
-    'num_layers': [2, 3, 4],
-    'activation_name': ['tanh', 'GELU'],
-    'lr': [0.001, 0.01, 0.1]
+    "hidden_features": [32, 64, 128],
+    "num_layers": [2, 3, 4],
+    "activation_name": ["tanh", "GELU"],
+    "lr": [0.001, 0.01, 0.1],
 }
 
 # Базовая конфигурация
-base_config = TrainConfig(
-    max_epochs=3000,
-    patience=200,
-    num_points=100
-)
+base_config = TrainConfig(max_epochs=3000, patience=200, num_points=100)
 
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T_inf=500.0,
-    _lambda=1.0,
-    h=10.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T_inf=500.0, _lambda=1.0, h=10.0)
 
 # Запуск Grid Search
 df_results = run_grid_search(
     param_grid=param_grid,
     base_config=base_config,
     phys=phys,
-    csv_path='results/grid_search.csv'
+    csv_path="results/grid_search.csv",
 )
 
 # Анализ результатов
 print(f"Всего экспериментов: {len(df_results)}")
 print(f"Лучший MSE: {df_results['mse'].min()}")
 print(f"Лучшая конфигурация:")
-best = df_results.loc[df_results['mse'].idxmin()]
-print(best[['layers', 'neurons', 'activation_func', 'lr', 'mse']])
+best = df_results.loc[df_results["mse"].idxmin()]
+print(best[["layers", "neurons", "activation_func", "lr", "mse"]])
 ```
 
 ---
@@ -212,10 +194,10 @@ _train_with_early_stopping(
 
 ```python
 config = TrainConfig(
-    max_epochs=10000,      # Максимум 10000 эпох
-    patience=500,          # Остановка после 500 эпох без улучшения
-    min_delta=1e-6,        # Минимальное улучшение 1e-6
-    monitor='total_loss'   # Мониторим общую потерю
+    max_epochs=10000,  # Максимум 10000 эпох
+    patience=500,  # Остановка после 500 эпох без улучшения
+    min_delta=1e-6,  # Минимальное улучшение 1e-6
+    monitor="total_loss",  # Мониторим общую потерю
 )
 ```
 
@@ -257,19 +239,12 @@ import pandas as pd
 
 # === Пример 1: Одиночный эксперимент ===
 
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T_inf=500.0,
-    _lambda=1.0,
-    h=10.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T_inf=500.0, _lambda=1.0, h=10.0)
 
 config = TrainConfig(
     hidden_features=64,
     num_layers=2,
-    activation_name='GELU',
+    activation_name="GELU",
     lr=0.01,
     max_epochs=3000,
     patience=200,
@@ -277,14 +252,11 @@ config = TrainConfig(
     weights=(1.0, 1.0, 1.0),
     save_img=True,
     show_plot=False,
-    image_path='results/single_experiment.png'
+    image_path="results/single_experiment.png",
 )
 
 metrics, history = run_experiment(
-    config=config,
-    phys=phys,
-    pde_fn=line_1d,
-    exact_fn=line_1d_robin_exact
+    config=config, phys=phys, pde_fn=line_1d, exact_fn=line_1d_robin_exact
 )
 
 print(f"\n=== Результаты эксперимента ===")
@@ -298,17 +270,13 @@ print(f"Время: {metrics['training_time']}c")
 # === Пример 2: Grid Search ===
 
 param_grid = {
-    'hidden_features': [32, 64],
-    'num_layers': [2, 3],
-    'activation_name': ['tanh', 'GELU'],
-    'lr': [0.001, 0.01]
+    "hidden_features": [32, 64],
+    "num_layers": [2, 3],
+    "activation_name": ["tanh", "GELU"],
+    "lr": [0.001, 0.01],
 }
 
-base_config = TrainConfig(
-    max_epochs=2000,
-    patience=150,
-    num_points=80
-)
+base_config = TrainConfig(max_epochs=2000, patience=150, num_points=80)
 
 df_results = run_grid_search(
     param_grid=param_grid,
@@ -316,14 +284,14 @@ df_results = run_grid_search(
     phys=phys,
     pde_fn=line_1d,
     exact_fn=line_1d_robin_exact,
-    csv_path='results/grid_search_results.csv'
+    csv_path="results/grid_search_results.csv",
 )
 
 # Анализ лучших результатов
 if not df_results.empty:
-    best_idx = df_results['mse'].idxmin()
+    best_idx = df_results["mse"].idxmin()
     best_row = df_results.loc[best_idx]
-    
+
     print(f"\n=== Лучшая конфигурация ===")
     print(f"Слои: {best_row['layers']}, Нейроны: {best_row['neurons']}")
     print(f"Активация: {best_row['activation_func']}")
@@ -340,11 +308,11 @@ if not df_results.empty:
 ```python
 # Рекомендуемые диапазоны
 param_grid = {
-    'hidden_features': [32, 64, 128, 256],    # Размер скрытого слоя
-    'num_layers': [2, 3, 4, 5],               # Глубина сети
-    'activation_name': ['tanh', 'GELU', 'Swish'],  # Активация
-    'lr': [0.0001, 0.001, 0.01, 0.1],         # Скорость обучения
-    'num_points': [50, 100, 200]              # Точки коллокации
+    "hidden_features": [32, 64, 128, 256],  # Размер скрытого слоя
+    "num_layers": [2, 3, 4, 5],  # Глубина сети
+    "activation_name": ["tanh", "GELU", "Swish"],  # Активация
+    "lr": [0.0001, 0.001, 0.01, 0.1],  # Скорость обучения
+    "num_points": [50, 100, 200],  # Точки коллокации
 }
 ```
 
@@ -352,18 +320,10 @@ param_grid = {
 
 ```python
 # Для быстрой отладки
-config_debug = TrainConfig(
-    max_epochs=500,
-    patience=50,
-    min_delta=1e-4
-)
+config_debug = TrainConfig(max_epochs=500, patience=50, min_delta=1e-4)
 
 # Для финального обучения
-config_final = TrainConfig(
-    max_epochs=10000,
-    patience=500,
-    min_delta=1e-7
-)
+config_final = TrainConfig(max_epochs=10000, patience=500, min_delta=1e-7)
 ```
 
 ### Сохранение и визуализация
@@ -371,8 +331,8 @@ config_final = TrainConfig(
 ```python
 config = TrainConfig(
     save_img=True,
-    show_plot=False,           # False для Grid Search
-    image_path='results/best_solution.png'
+    show_plot=False,  # False для Grid Search
+    image_path="results/best_solution.png",
 )
 ```
 

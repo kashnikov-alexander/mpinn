@@ -6,8 +6,8 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-
 # ============================================================ helpers
+
 
 def _broadcast(value, like):
     """Скаляр или массив -> массив формы like."""
@@ -18,6 +18,7 @@ def _broadcast(value, like):
 
 def _normal_derivative(model, points, normals):
     """dT/dn в точках. model ожидает (N, D) -> (N,)."""
+
     def grad_one(x):
         return jax.grad(lambda y: model(y[None]).ravel()[0])(x)
 
@@ -35,8 +36,10 @@ def _lambda_vals(model, points, lam):
 
 # ============================================================ BC hierarchy
 
+
 class BC(eqx.Module):
     """Базовый класс граничного условия."""
+
     points: jax.Array
 
     def residual(self, net, lam):
@@ -45,6 +48,7 @@ class BC(eqx.Module):
 
 class DirichletBC(BC):
     """T = T на границе."""
+
     T: float | jax.Array
 
     def residual(self, net, lam):
@@ -54,6 +58,7 @@ class DirichletBC(BC):
 
 class NeumannBC(BC):
     """Закон Фурье: -lam * dT/dn = q."""
+
     normals: jax.Array
     q: float | jax.Array
 
@@ -65,6 +70,7 @@ class NeumannBC(BC):
 
 class RobinBC(BC):
     """Конвективный теплообмен: h * (T - T_inf) + lam * dT/dn = 0."""
+
     normals: jax.Array
     h: float
     T_inf: float
@@ -78,6 +84,7 @@ class RobinBC(BC):
 
 class AdiabaticBC(BC):
     """Адиабатическая граница: dT/dn = 0."""
+
     normals: jax.Array
 
     def residual(self, net, lam):

@@ -27,7 +27,7 @@
 **Абстрактные методы:**
 
 ```python
-sample_interior(self, n_points, method='random', rng=None)
+sample_interior(self, n_points, method="random", rng=None)
 ```
 Генерирует точки внутри области.
 
@@ -64,7 +64,7 @@ Interval(x0, x1)
 #### Метод `sample_interior`
 
 ```python
-sample_interior(n_points, method='random', rng=None)
+sample_interior(n_points, method="random", rng=None)
 ```
 
 Генерирует точки внутри интервала.
@@ -89,10 +89,10 @@ from geom import Interval
 interval = Interval(0.0, 1.0)
 
 # Случайные точки
-x_random = interval.sample_interior(100, method='random')
+x_random = interval.sample_interior(100, method="random")
 
 # Равномерная сетка
-x_uniform = interval.sample_interior(100, method='uniform')
+x_uniform = interval.sample_interior(100, method="uniform")
 ```
 
 #### Метод `sample_boundary`
@@ -117,7 +117,7 @@ boundary = interval.sample_boundary()
 #### Метод `generate_collocation`
 
 ```python
-generate_collocation(n_interior=100, method='random', rng=None)
+generate_collocation(n_interior=100, method="random", rng=None)
 ```
 
 Генерирует полный набор точек для обучения: внутренние + граничные.
@@ -171,7 +171,7 @@ Rectangle(x_min, x_max, y_min, y_max)
 #### Метод `sample_interior`
 
 ```python
-sample_interior(n_points, method='random', rng=None)
+sample_interior(n_points, method="random", rng=None)
 ```
 
 Генерирует точки внутри прямоугольника.
@@ -196,16 +196,16 @@ from geom import Rectangle
 rect = Rectangle(0.0, 1.0, 0.0, 0.5)
 
 # Случайные точки
-points = rect.sample_interior(200, method='random')
+points = rect.sample_interior(200, method="random")
 
 # Равномерная сетка
-grid = rect.sample_interior(200, method='uniform')
+grid = rect.sample_interior(200, method="uniform")
 ```
 
 #### Метод `sample_boundary`
 
 ```python
-sample_boundary(n_points=None, method='random', rng=None)
+sample_boundary(n_points=None, method="random", rng=None)
 ```
 
 Генерирует точки на периметре прямоугольника.
@@ -236,9 +236,13 @@ boundary = rect.sample_boundary(n_points=100)
 #### Метод `generate_collocation`
 
 ```python
-generate_collocation(n_interior=100, n_boundary=None, 
-                     method_interior='random', method_boundary='random',
-                     rng=None)
+generate_collocation(
+    n_interior=100,
+    n_boundary=None,
+    method_interior="random",
+    method_boundary="random",
+    rng=None,
+)
 ```
 
 Генерирует полный набор точек: внутренние + граничные.
@@ -261,10 +265,7 @@ generate_collocation(n_interior=100, n_boundary=None,
 
 ```python
 x_collocation = rect.generate_collocation(
-    n_interior=200,
-    n_boundary=50,
-    method_interior='random',
-    method_boundary='random'
+    n_interior=200, n_boundary=50, method_interior="random", method_boundary="random"
 )
 ```
 
@@ -299,10 +300,7 @@ from geom import Rectangle
 rect = Rectangle(0.0, 1.0, 0.0, 0.5)
 
 # Точки для обучения
-x_collocation = rect.generate_collocation(
-    n_interior=200,
-    n_boundary=50
-)
+x_collocation = rect.generate_collocation(n_interior=200, n_boundary=50)
 ```
 
 ---
@@ -344,7 +342,7 @@ key = random.PRNGKey(42)
 geometry = Interval(0.0, 1.0)
 
 # Генерация с фиксированным seed
-x_points = geometry.sample_interior(100, method='random', rng=key)
+x_points = geometry.sample_interior(100, method="random", rng=key)
 ```
 
 ---
@@ -361,6 +359,7 @@ from bc import dirichlet_bc
 from analytic import line_1d_dirichlet_exact
 from geom import Interval
 
+
 # Физические параметры
 class Physics:
     x0 = 0.0
@@ -368,13 +367,14 @@ class Physics:
     T0 = 300.0
     T1 = 400.0
 
+
 phys = Physics()
 
 # Создание геометрии
 geometry = Interval(phys.x0, phys.x1)
 
 # Генерация точек коллокации
-x_collocation = geometry.generate_collocation(n_interior=100, method='random')
+x_collocation = geometry.generate_collocation(n_interior=100, method="random")
 
 print(f"Форма точек коллокации: {x_collocation.shape}")
 # (102, 1) - 100 внутренних + 2 граничные
@@ -391,7 +391,7 @@ history, time = pinn.fit(
     pde_fn=line_1d,
     bc_fns=[bc_left, bc_right],
     phys=phys,
-    epochs=10000
+    epochs=10000,
 )
 
 # Оценка

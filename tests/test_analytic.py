@@ -101,7 +101,9 @@ class TestAnalyticCylinder1D:
     def test_cylinder_robin_shape(self, phys):
         """Test cylinder Robin solution shape."""
         x = jnp.linspace(0.1, 1.0, 20).reshape(-1, 1)
-        exact_fn = cylinder_1d_robin_exact(T0=300.0, T_inf=500.0, h=10.0, r0=0.1, r1=1.0)
+        exact_fn = cylinder_1d_robin_exact(
+            T0=300.0, T_inf=500.0, h=10.0, r0=0.1, r1=1.0
+        )
         u = exact_fn(x, phys)
         assert u.shape[0] == x.shape[0]
 

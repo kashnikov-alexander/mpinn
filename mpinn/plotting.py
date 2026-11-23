@@ -5,65 +5,47 @@
 """
 
 import os
-from typing import Optional, List, Dict, Callable, Union
+from collections.abc import Callable
+from typing import Union
 
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import jax.numpy as jnp
 
 try:
     import plotly.graph_objects as go
+
     HAS_PLOTLY = True
 except ImportError:
     HAS_PLOTLY = False
 
 from .geom import GeometryBase
 
-# ===================== 1D графики (обратно совместимые) =====================
+
 def show_plot(
     x_test: Union[np.ndarray, "jnp.ndarray"],
     T_pred: Union[np.ndarray, "jnp.ndarray"],
     T_exact: Union[np.ndarray, "jnp.ndarray"],
-    title: str = "Сравнение PINN и точного решения"
+    title: str = "Сравнение PINN и точного решения",
+    save_path: str | None = None,
 ) -> None:
-    """Отображает 1D график сравнения."""
-    plt.figure(figsize=(8, 5))
-    plt.plot(x_test, T_exact, "b-", label="Аналитическое решение", linewidth=2)
-    plt.plot(x_test, T_pred, "r:", label="ФИНС", linewidth=6)
-    plt.title(title, fontsize=16)
-    plt.xlabel("x, м", fontsize=14)
-    plt.ylabel("T, К", fontsize=14)
-    plt.legend(loc="best", fontsize=14)
-    plt.grid(True, alpha=0.3)
-    plt.xlim(x_test.min(), x_test.max())
-    plt.tight_layout()
+    """Отображает и/или сохраняет 1D график сравнения."""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(x_test, T_exact, "b-", label="Аналитическое решение", linewidth=2)
+    ax.plot(x_test, T_pred, "r:", label="ФИНС", linewidth=6)
+    ax.set_title(title, fontsize=16)
+    ax.set_xlabel("x, м", fontsize=14)
+    ax.set_ylabel("T, К", fontsize=14)
+    ax.legend(loc="best", fontsize=14)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(x_test.min(), x_test.max())
+    fig.tight_layout()
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=72, bbox_inches="tight")
+        print(f"График сохранен: {save_path}")
     plt.show()
 
-def save_plot(
-    x_test: Union[np.ndarray, "jnp.ndarray"],
-    T_pred: Union[np.ndarray, "jnp.ndarray"],
-    T_exact: Union[np.ndarray, "jnp.ndarray"],
-    save_path: str = "",
-    title: str = "Сравнение PINN и точного решения"
-) -> None:
-    """Сохраняет 1D график сравнения."""
-    plt.figure(figsize=(8, 5))
-    plt.plot(x_test, T_exact, "b-", label="Аналитическое решение", linewidth=2)
-    plt.plot(x_test, T_pred, "r:", label="ФИНС", linewidth=6)
-    plt.title(title, fontsize=16)
-    plt.xlabel("x, м", fontsize=14)
-    plt.ylabel("T, К", fontsize=14)
-    plt.legend(loc="best", fontsize=14)
-    plt.grid(True, alpha=0.3)
-    plt.xlim(x_test.min(), x_test.max())
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=72, bbox_inches="tight")
-    plt.close()
-
-import os
-import numpy as np
-import matplotlib.pyplot as plt
 
 def show_history(
     history,
@@ -76,8 +58,8 @@ def show_history(
     save_path=None,
 ):
     """Универсальная визуализация истории обучения.
-    
-    labels: 
+
+    labels:
         None -> рисует total_loss и все компоненты (Comp 0, Comp 1...)
         list[str] -> рисует total_loss и компоненты по порядку (0, 1, ...)
         dict[str, int] -> рисует total_loss и компоненты по указанным индексам
@@ -90,28 +72,34 @@ def show_history(
 
     # 1. Рисуем total_loss (всегда, если не переопределено)
     if "total_loss" in history:
-        ax.plot(steps, history["total_loss"], label="total_loss", linewidth=2, color='black')
+        ax.plot(
+            steps, history["total_loss"], label="total_loss", linewidth=2, color="black"
+        )
 
     # 2. Рисуем компоненты
     if "loss_components" in history and len(history["loss_components"]) > 0:
-        comps = np.array(history["loss_components"]) # (N, M)
-        
+        comps = np.array(history["loss_components"])  # (N, M)
+
         if labels is None:
             # Рисуем все компоненты
             for i in range(comps.shape[1]):
                 ax.plot(steps, comps[:, i], label=f"Comp {i}", linewidth=2)
-                
+
         elif isinstance(labels, dict):
             # Рисуем по индексам
             for name, idx in labels.items():
                 if idx >= comps.shape[1]:
-                    raise ValueError(f"Индекс {idx} для {name} выходит за пределы (всего {comps.shape[1]})")
+                    raise ValueError(
+                        f"Индекс {idx} для {name} выходит за пределы (всего {comps.shape[1]})"
+                    )
                 ax.plot(steps, comps[:, idx], label=name, linewidth=2)
-                
+
         elif isinstance(labels, list):
             # Рисуем по порядку
             if len(labels) > comps.shape[1]:
-                raise ValueError(f"Передано {len(labels)} labels, но компонентов всего {comps.shape[1]}")
+                raise ValueError(
+                    f"Передано {len(labels)} labels, но компонентов всего {comps.shape[1]}"
+                )
             for i, name in enumerate(labels):
                 ax.plot(steps, comps[:, i], label=name, linewidth=2)
         else:
@@ -177,29 +165,50 @@ def show_plot_mpinn(
         x_max = max(float(np.asarray(d["x"]).max()) for d in domain_data)
         x_full = np.linspace(x_min, x_max, 1000)
         T_full = np.asarray(exact_fn(x_full.reshape(-1, 1))).ravel()
-        ax.plot(x_full, T_full, "b-",
-                label="Аналитическое решение", linewidth=2, zorder=1)
+        ax.plot(
+            x_full, T_full, "b-", label="Аналитическое решение", linewidth=2, zorder=1
+        )
 
     # --- Домены ---
     for i, d in enumerate(domain_data):
         color = d.get("color", plt.cm.tab10(i))
         label = d.get("label", f"Домен {i}")
         x = np.asarray(d["x"])
-        ax.plot(x, np.asarray(d["T_pred"]), ":", color=color,
-                label=label, linewidth=5, zorder=2)
+        ax.plot(
+            x,
+            np.asarray(d["T_pred"]),
+            ":",
+            color=color,
+            label=label,
+            linewidth=5,
+            zorder=2,
+        )
 
         # T_exact по домену — только если exact_fn НЕ задан
         # (иначе дублирование с глобальной линией)
         if exact_fn is None and "T_exact" in d:
-            ax.plot(x, np.asarray(d["T_exact"]), "--", color=color,
-                    linewidth=1, alpha=0.6, zorder=0)
+            ax.plot(
+                x,
+                np.asarray(d["T_exact"]),
+                "--",
+                color=color,
+                linewidth=1,
+                alpha=0.6,
+                zorder=0,
+            )
 
     # --- Интерфейсы ---
     if interfaces:
         for k, x_int in enumerate(interfaces):
-            ax.axvline(x_int, color="gray", linestyle="--",
-                       linewidth=1.5, alpha=0.6, zorder=0,
-                       label="Интерфейс" if k == 0 else None)
+            ax.axvline(
+                x_int,
+                color="gray",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.6,
+                zorder=0,
+                label="Интерфейс" if k == 0 else None,
+            )
 
     ax.set_title(title, fontsize=14)
     ax.set_xlabel("x, м", fontsize=13)
@@ -220,6 +229,7 @@ def show_plot_mpinn(
 
     return fig, ax
 
+
 # ===================== 2D/3D графики =====================
 def plot_2d_contour(
     X: np.ndarray,
@@ -230,7 +240,7 @@ def plot_2d_contour(
     xlabel: str = "x, м",
     ylabel: str = "y, м",
     cmap: str = "jet",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ) -> None:
     """Строит контурный график по готовым X, Y, T."""
     plt.figure(figsize=(7, 6))
@@ -257,7 +267,7 @@ def plot_2d(
     xlabel: str = "x, м",
     ylabel: str = "y, м",
     cmap: str = "jet",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ) -> None:
     """Строит пиксельный график по готовым X, Y, T."""
     x_min, x_max = float(X.min()), float(X.max())
@@ -284,15 +294,17 @@ def plot_2d(
     plt.show()
     plt.close()
 
+
 # ===================== 3D графики (с маскированием) =====================
+
 
 def plot_3d_slices(
     geom: "GeometryBase",
     predict_fn: Callable,
-    slice_planes: Optional[List[Dict[str, float]]] = None,
+    slice_planes: list[dict[str, float]] | None = None,
     resolution: int = 60,
     title: str = "Срезы температуры",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ) -> None:
     """
     Срезы 3D-геометрии по плоскостям с маскированием вне домена
@@ -305,7 +317,7 @@ def plot_3d_slices(
     x_min, y_min, z_min = [float(v) for v in min_corner]
     x_max, y_max, z_max = [float(v) for v in max_corner]
 
-    has_mask = hasattr(geom, 'is_inside')
+    has_mask = hasattr(geom, "is_inside")
 
     if slice_planes is None:
         slice_planes = [
@@ -327,23 +339,19 @@ def plot_3d_slices(
             a = np.linspace(y_min, y_max, resolution)
             b = np.linspace(z_min, z_max, resolution)
             A, B = np.meshgrid(a, b, indexing="ij")
-            pts = np.column_stack([np.full(resolution**2, value),
-                                   A.ravel(), B.ravel()])
+            pts = np.column_stack([np.full(resolution**2, value), A.ravel(), B.ravel()])
             xlabel, ylabel = "y, м", "z, м"
         elif axis == "y":
             a = np.linspace(x_min, x_max, resolution)
             b = np.linspace(z_min, z_max, resolution)
             A, B = np.meshgrid(a, b, indexing="ij")
-            pts = np.column_stack([A.ravel(),
-                                   np.full(resolution**2, value),
-                                   B.ravel()])
+            pts = np.column_stack([A.ravel(), np.full(resolution**2, value), B.ravel()])
             xlabel, ylabel = "x, м", "z, м"
         elif axis == "z":
             a = np.linspace(x_min, x_max, resolution)
             b = np.linspace(y_min, y_max, resolution)
             A, B = np.meshgrid(a, b, indexing="ij")
-            pts = np.column_stack([A.ravel(), B.ravel(),
-                                   np.full(resolution**2, value)])
+            pts = np.column_stack([A.ravel(), B.ravel(), np.full(resolution**2, value)])
             xlabel, ylabel = "x, м", "y, м"
         else:
             raise ValueError(f"Неизвестная ось: {axis}")
@@ -378,7 +386,7 @@ def plot_3d_isosurface(
     resolution: int = 40,
     n_surfaces: int = 10,
     title: str = "Изоповерхности T",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ) -> None:
     """3D изоповерхности T через Plotly. Маска через geom.is_inside."""
     if not HAS_PLOTLY:
@@ -401,22 +409,29 @@ def plot_3d_isosurface(
 
     T_3d = T.reshape(XX.shape)
 
-    fig = go.Figure(data=go.Isosurface(
-        x=XX.ravel(), y=YY.ravel(), z=ZZ.ravel(),
-        value=T_3d.ravel(),
-        isomin=float(np.nanmin(T_3d)),
-        isomax=float(np.nanmax(T_3d)),
-        surface_count=n_surfaces,
-        colorscale="Jet",
-        caps=dict(x_show=False, y_show=False, z_show=False),
-    ))
+    fig = go.Figure(
+        data=go.Isosurface(
+            x=XX.ravel(),
+            y=YY.ravel(),
+            z=ZZ.ravel(),
+            value=T_3d.ravel(),
+            isomin=float(np.nanmin(T_3d)),
+            isomax=float(np.nanmax(T_3d)),
+            surface_count=n_surfaces,
+            colorscale="Jet",
+            caps=dict(x_show=False, y_show=False, z_show=False),
+        )
+    )
     fig.update_layout(
         title=title,
-        scene=dict(xaxis_title="x, м",
-                   yaxis_title="y, м",
-                   zaxis_title="z, м",
-                   aspectmode="data"),
-        width=900, height=700,
+        scene=dict(
+            xaxis_title="x, м",
+            yaxis_title="y, м",
+            zaxis_title="z, м",
+            aspectmode="data",
+        ),
+        width=900,
+        height=700,
     )
     fig.show()
     if save_path:
@@ -428,22 +443,19 @@ def plot_3d_isosurface(
         print(f"Сохранено: {save_path}")
 
 
-
 def plot_3d_surface_plotly(
     X: Union[np.ndarray, "jnp.ndarray"],
     Y: Union[np.ndarray, "jnp.ndarray"],
     Z: Union[np.ndarray, "jnp.ndarray"],
     title: str = "3D Температурное поле",
-    labels: Optional[Dict[str, str]] = None,
-    save_path: Optional[str] = None,
+    labels: dict[str, str] | None = None,
+    save_path: str | None = None,
 ) -> None:
     """
     Создает интерактивный 3D график поверхности с помощью Plotly.
     """
     if not HAS_PLOTLY:
-        raise ImportError(
-            "Plotly не установлен. Установите его: pip install plotly"
-        )
+        raise ImportError("Plotly не установлен. Установите его: pip install plotly")
 
     # Приводим к NumPy для надёжности (plotly лучше работает с numpy)
     X = np.asarray(X)
@@ -451,27 +463,96 @@ def plot_3d_surface_plotly(
     Z = np.asarray(Z)
 
     if labels is None:
-        labels = {'x': 'X', 'y': 'Y', 'z': 'Температура'}
+        labels = {"x": "X", "y": "Y", "z": "Температура"}
 
-    fig = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale='jet')])
+    fig = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale="jet")])
 
     fig.update_layout(
         title=title,
         scene=dict(
-            xaxis_title=labels.get('x', 'X'),
-            yaxis_title=labels.get('y', 'Y'),
-            zaxis_title=labels.get('z', 'Z'),
+            xaxis_title=labels.get("x", "X"),
+            yaxis_title=labels.get("y", "Y"),
+            zaxis_title=labels.get("z", "Z"),
         ),
         width=800,
         height=600,
-        margin=dict(l=0, r=0, b=0, t=40)
+        margin=dict(l=0, r=0, b=0, t=40),
     )
     fig.show()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        if save_path.endswith('.html'):
+        if save_path.endswith(".html"):
             fig.write_html(save_path)
         else:
             fig.write_image(save_path)
         print(f"График сохранён: {save_path}")
 
+
+def plot_3d_surfaces(
+    surfaces_data: list,
+    title: str = "3D Температурное поле",
+    save_path: str | None = None,
+    show: bool = True,
+) -> None:
+    """
+    Рисует 3D-поверхности с градиентом температуры (Plotly Surface).
+    Поверхности полностью непрозрачные, легенда рисуется только один раз.
+    """
+    if not HAS_PLOTLY:
+        raise ImportError("Установите plotly: pip install plotly")
+
+    import numpy as np
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    # Собираем все температуры, чтобы задать единую цветовую шкалу
+    all_T = np.concatenate([surf["T"].ravel() for surf in surfaces_data])
+    cmin, cmax = float(np.nanmin(all_T)), float(np.nanmax(all_T))
+
+    for i, surf in enumerate(surfaces_data):
+        fig.add_trace(
+            go.Surface(
+                x=surf["X"],
+                y=surf["Y"],
+                z=surf["Z"],
+                surfacecolor=surf["T"],
+                colorscale="Jet",
+                name=surf.get("name", "Поверхность"),
+                showscale=(i == 0),  # <--- Легенда ТОЛЬКО для первой грани
+                opacity=1.0,  # <--- Полная непрозрачность
+                cmin=cmin,  # <--- Фиксируем минимум шкалы
+                cmax=cmax,  # <--- Фиксируем максимум шкалы
+                colorbar=dict(
+                    title="T, К",
+                    tickformat=".1f",  # <--- Округляем цифры до 1 знака после запятой
+                    thickness=20,
+                    len=0.8,
+                ),
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        scene=dict(
+            xaxis_title="x, м",
+            yaxis_title="y, м",
+            zaxis_title="z, м",
+            aspectmode="data",
+        ),
+        width=1000,
+        height=800,
+        margin=dict(l=0, r=0, b=0, t=40),
+    )
+
+    if save_path:
+        import os
+
+        dirname = os.path.dirname(save_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        fig.write_html(save_path)
+        print(f"Сохранено: {save_path}")
+
+    if show:
+        fig.show(config={"responsive": True, "displaylogo": False})

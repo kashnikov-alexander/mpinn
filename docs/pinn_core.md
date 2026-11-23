@@ -217,7 +217,7 @@ history, time = pinn.fit(
     pde_fn=line_1d,
     bc_fns=[bc_left, bc_right],
     phys=phys,
-    epochs=10000
+    epochs=10000,
 )
 ```
 
@@ -370,6 +370,7 @@ from pde import line_1d
 from bc import dirichlet_bc
 from geom import Interval
 
+
 # Физические параметры
 class Physics:
     x0 = 0.0
@@ -377,12 +378,12 @@ class Physics:
     T0 = 300.0
     T1 = 400.0
 
+
 phys = Physics()
 
 # Создание сети
 rngs = nnx.Rngs(0)
-net = FCNet(din=1, dmid=50, dout=1, num_layers=4, 
-            activation=nnx.tanh, rngs=rngs)
+net = FCNet(din=1, dmid=50, dout=1, num_layers=4, activation=nnx.tanh, rngs=rngs)
 
 # PINN
 optimizer = optax.adam(1e-3)
@@ -403,7 +404,7 @@ history, training_time = pinn.fit(
     pde_fn=line_1d,
     bc_fns=[bc_left, bc_right],
     phys=phys,
-    epochs=10000
+    epochs=10000,
 )
 
 # Предсказание и оценка
@@ -411,6 +412,7 @@ x_test = jnp.linspace(0, 1, 100).reshape(-1, 1)
 T_pred = pinn.predict(x_test)
 
 from analytic import line_1d_dirichlet_exact
+
 T_exact = line_1d_dirichlet_exact(x_test.ravel(), phys)
 
 metrics, _, _ = pinn.evaluate(x_test, line_1d_dirichlet_exact, phys)

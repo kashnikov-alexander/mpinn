@@ -165,10 +165,6 @@ T_exact = line_1d_dirichlet_exact(x_test.ravel(), phys)
 metrics, _, _ = pinn.evaluate(x_test, line_1d_dirichlet_exact, phys)
 print(f"MAE: {metrics['mae']}, RMSE: {metrics['rmse']}")
 
-# Сохранение графика
-pinn.save_plot(x_test, T_pred, T_exact, phys, "solution.png")
-```
-
 ### Пример 2: Задача с источником тепла
 
 ```python
@@ -212,10 +208,10 @@ from mpinn.bc import dirichlet_bc
 phys = PhysicsParams(
     x0=0.0,
     x1=0.2,
-    interfaces=[0.1],           # Один интерфейс между слоями
-    all_lambdas=[1.0, 0.5],     # Теплопроводности слоёв
-    T0=300.0,               # Температура на левой границе
-    T1=400.0               # Температура на правой границе
+    interfaces=[0.1],  # Один интерфейс между слоями
+    all_lambdas=[1.0, 0.5],  # Теплопроводности слоёв
+    T0=300.0,  # Температура на левой границе
+    T1=400.0,  # Температура на правой границе
 )
 
 # Создаём по одной сети на каждый домен (2 сети для 2 слоёв)
@@ -231,7 +227,7 @@ mpinn = MPINN(
     opt=optax.adam(1e-3),
     phys=phys,
     n_collocation=100,
-    weight_strategy=weight_strategy
+    weight_strategy=weight_strategy,
 )
 
 # Обучение
@@ -240,7 +236,7 @@ history, training_time = mpinn.fit(
     bc_left_fn=lambda m: dirichlet_bc(m, x=phys.x0, T=phys.T0),
     bc_right_fn=lambda m: dirichlet_bc(m, x=phys.x1, T=phys.T1),
     phys=phys,
-    epochs=10000
+    epochs=10000,
 )
 
 # Предсказание
@@ -265,10 +261,10 @@ from mpinn.bc import dirichlet_bc, neuman_bc
 phys = PhysicsParams(
     x0=0.0,
     x1=0.3,
-    interfaces=[0.1, 0.2],        # Два интерфейса (границы между слоями)
+    interfaces=[0.1, 0.2],  # Два интерфейса (границы между слоями)
     all_lambdas=[1.0, 0.5, 2.0],  # Теплопроводности трёх слоёв
     T0=300.0,
-    T1=400.0
+    T1=400.0,
 )
 
 # Создаём по одной сети на каждый домен (3 сети для 3 слоёв)
@@ -283,8 +279,8 @@ mpinn = MPINN(
     nets=nets,
     opt=optax.adam(5e-4),
     phys=phys,
-    n_collocation=150,            # 150 точек коллокации на каждый домен
-    weight_strategy=weight_strategy
+    n_collocation=150,  # 150 точек коллокации на каждый домен
+    weight_strategy=weight_strategy,
 )
 
 # Граничные условия
@@ -298,7 +294,7 @@ history, training_time = mpinn.fit(
     bc_right_fn=bc_right,
     phys=phys,
     epochs=15000,
-    log_interval=500
+    log_interval=500,
 )
 
 # Предсказание и визуализация
@@ -307,9 +303,12 @@ T_pred = mpinn.predict(x_test)
 
 # Сохранение графика с маркерами интерфейсов
 mpinn.save_plot(
-    x_test, T_pred, T_exact=None, phys=phys,
-    save_path='multilayer_solution.png',
-    title='Температурное поле в трёхслойной стене'
+    x_test,
+    T_pred,
+    T_exact=None,
+    phys=phys,
+    save_path="multilayer_solution.png",
+    title="Температурное поле в трёхслойной стене",
 )
 
 # Печать информации о структуре
@@ -343,26 +342,19 @@ from mpinn.config import PhysicsParams, TrainConfig, get_activation, get_optimiz
 from mpinn.runner import run_experiment
 
 # Конфигурация физики
-phys = PhysicsParams(
-    x0=0.0,
-    x1=1.0,
-    T0=300.0,
-    T_inf=500.0,
-    _lambda=1.0,
-    h=10.0
-)
+phys = PhysicsParams(x0=0.0, x1=1.0, T0=300.0, T_inf=500.0, _lambda=1.0, h=10.0)
 
 # Конфигурация обучения
 config = TrainConfig(
     hidden_features=64,
     num_layers=2,
-    activation_name='GELU',
-    opt_name='adam',
+    activation_name="GELU",
+    opt_name="adam",
     lr=0.01,
     max_epochs=3000,
     patience=200,  # Early stopping
     num_points=100,
-    weights=(1.0, 1.0, 1.0)
+    weights=(1.0, 1.0, 1.0),
 )
 
 # Запуск эксперимента
@@ -370,10 +362,7 @@ from mpinn.pde import line_1d
 from mpinn.analytic import line_1d_robin_exact
 
 result, history = run_experiment(
-    config=config,
-    phys=phys,
-    pde_fn=line_1d,
-    exact_fn=line_1d_robin_exact
+    config=config, phys=phys, pde_fn=line_1d, exact_fn=line_1d_robin_exact
 )
 
 print(f"MSE: {result['mse']}, MAPE: {result['mape']}")
@@ -701,11 +690,13 @@ MPINN(nets, opt, phys, n_collocation, weight_strategy, rng)
 from mpinn.bc import neuman_bc
 from mpinn.config import PhysicsParams
 
+
 class PhysicsNeuman:
     x0 = 0.0
     x1 = 1.0
     T0 = 300.0
     grad_right = 100.0  # K/м
+
 
 phys = PhysicsNeuman()
 bc_right = lambda model: neuman_bc(model, x=phys.x1, g=phys.grad_right)
@@ -721,19 +712,15 @@ phys = PhysicsParams(
     x0=0.0,
     x1=1.0,
     T0=300.0,
-    h=10.0,          # Вт/(м²·K)
-    _lambda=1.0,     # Вт/(м·K)
-    T_inf=500.0      # K
+    h=10.0,  # Вт/(м²·K)
+    _lambda=1.0,  # Вт/(м·K)
+    T_inf=500.0,  # K
 )
 
 # Условие Робина: α·T + β·dT/dx = γ
 # где α=h, β=λ, γ=h·T_inf
 bc_right = lambda model: robin_bc(
-    model, 
-    x=phys.x1, 
-    alpha=phys.h, 
-    beta=phys._lambda, 
-    h=phys.h * phys.T_inf
+    model, x=phys.x1, alpha=phys.h, beta=phys._lambda, h=phys.h * phys.T_inf
 )
 ```
 
@@ -748,10 +735,10 @@ from mpinn.config import PhysicsParams
 phys = PhysicsParams(
     x0=0.0,
     x1=0.3,
-    interfaces=[0.1, 0.2],        # Границы между слоями
+    interfaces=[0.1, 0.2],  # Границы между слоями
     all_lambdas=[1.0, 0.5, 2.0],  # Теплопроводности слоёв
     T0=300.0,
-    T1=400.0
+    T1=400.0,
 )
 
 # Создаём по одной сети на каждый домен
@@ -766,7 +753,7 @@ mpinn = MPINN(
     opt=optax.adam(1e-3),
     phys=phys,
     n_collocation=100,
-    weight_strategy=weight_strategy
+    weight_strategy=weight_strategy,
 )
 
 # Веса потерь: PDE для каждого домена + BC слева + BC справа + интерфейсы
@@ -780,10 +767,10 @@ from mpinn.runner import run_grid_search
 from mpinn.config import TrainConfig, PhysicsParams
 
 param_grid = {
-    'hidden_features': [32, 64, 128],
-    'num_layers': [2, 3, 4],
-    'lr': [0.001, 0.01, 0.1],
-    'activation_name': ['tanh', 'GELU', 'silu']
+    "hidden_features": [32, 64, 128],
+    "num_layers": [2, 3, 4],
+    "lr": [0.001, 0.01, 0.1],
+    "activation_name": ["tanh", "GELU", "silu"],
 }
 
 base_config = TrainConfig()
@@ -793,11 +780,11 @@ df_results = run_grid_search(
     param_grid=param_grid,
     base_config=base_config,
     phys=phys,
-    csv_path='results/grid_search.csv'
+    csv_path="results/grid_search.csv",
 )
 
 # Поиск лучшей конфигурации
-best_idx = df_results['mse'].idxmin()
+best_idx = df_results["mse"].idxmin()
 best_config = df_results.loc[best_idx]
 print(f"Лучшая конфигурация: {best_config}")
 ```

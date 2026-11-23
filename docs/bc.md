@@ -185,17 +185,13 @@ import jax.numpy as jnp
 # h_conv * (T_inf - T) = -lambda * dT/dx
 # Перепишем: h_conv * T + lambda * dT/dx = h_conv * T_inf
 
-h_conv = 10.0      # Вт/(м²·K)
-_lambda = 1.0      # Вт/(м·K)
-T_inf = 500.0      # K
+h_conv = 10.0  # Вт/(м²·K)
+_lambda = 1.0  # Вт/(м·K)
+T_inf = 500.0  # K
 
 x1 = jnp.array([1.0, 0.99, 0.98])
 bc_convection = lambda model: robin_bc(
-    model, 
-    x=x1,
-    alpha=h_conv, 
-    beta=_lambda, 
-    h=h_conv * T_inf
+    model, x=x1, alpha=h_conv, beta=_lambda, h=h_conv * T_inf
 )
 ```
 
@@ -226,7 +222,7 @@ history, time = pinn.fit(
     pde_fn=line_1d,
     bc_fns=[bc_left, bc_right],  # Список BC
     phys=phys,
-    epochs=10000
+    epochs=10000,
 )
 ```
 
@@ -316,6 +312,7 @@ pinn.fit(..., bc_fns=[bc_left, bc_right], ...)
 ```python
 def get_T(x_val):
     return model(jnp.array([[x_val]])).ravel()[0]
+
 
 dT_dx = jax.grad(get_T)(xi)  # Для каждой точки xi
 ```

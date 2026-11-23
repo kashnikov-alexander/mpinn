@@ -295,17 +295,7 @@ print(f"MAE: {metrics['mae']}, RMSE: {metrics['rmse']}")
 ### Встроенная оценка через evaluate()
 
 ```python
-metrics, T_pred, T_exact = pinn.evaluate(
-    x_test, 
-    line_1d_dirichlet_exact, 
-    phys
-)
-```
-
-### Визуализация
-
-```python
-pinn.save_plot(x_test, T_pred, T_exact, phys, "comparison.png")
+metrics, T_pred, T_exact = pinn.evaluate(x_test, line_1d_dirichlet_exact, phys)
 ```
 
 ---
@@ -319,7 +309,8 @@ class Physics:
     x0 = 0.0
     x1 = 1.0
     T0 = 300.0  # K
-    T1 = 400.0 # K
+    T1 = 400.0  # K
+
 
 exact_fn = line_1d_dirichlet_exact
 ```
@@ -330,8 +321,9 @@ exact_fn = line_1d_dirichlet_exact
 class Physics:
     x0 = 0.0
     x1 = 1.0
-    T0 = 300.0      # K
+    T0 = 300.0  # K
     grad_right = 100.0  # K/м
+
 
 exact_fn = line_1d_neuman_exact
 ```
@@ -342,10 +334,11 @@ exact_fn = line_1d_neuman_exact
 class Physics:
     x0 = 0.0
     x1 = 1.0
-    T0 = 300.0      # K
-    h = 10.0            # Вт/(м²·K)
-    _lambda = 1.0       # Вт/(м·K)
-    T_inf = 500.0       # K
+    T0 = 300.0  # K
+    h = 10.0  # Вт/(м²·K)
+    _lambda = 1.0  # Вт/(м·K)
+    T_inf = 500.0  # K
+
 
 exact_fn = line_1d_robin_exact
 ```
@@ -354,10 +347,11 @@ exact_fn = line_1d_robin_exact
 
 ```python
 class Physics:
-    x0 = 0.1    # м (внутренний радиус)
-    x1 = 0.5   # м (внешний радиус)
+    x0 = 0.1  # м (внутренний радиус)
+    x1 = 0.5  # м (внешний радиус)
     T0 = 300.0  # K
-    T1 = 400.0 # K
+    T1 = 400.0  # K
+
 
 exact_fn = cylinder_1d_dirichlet_exact
 ```
@@ -366,10 +360,11 @@ exact_fn = cylinder_1d_dirichlet_exact
 
 ```python
 class Physics:
-    x0 = 0.1    # м (внутренний радиус)
-    x1 = 0.5   # м (внешний радиус)
+    x0 = 0.1  # м (внутренний радиус)
+    x1 = 0.5  # м (внешний радиус)
     T0 = 300.0  # K
-    T1 = 400.0 # K
+    T1 = 400.0  # K
+
 
 exact_fn = sphere_1d_dirichlet_exact
 ```

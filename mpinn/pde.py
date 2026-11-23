@@ -29,8 +29,10 @@ def _source(x, source_fn):
 
 # ==================== 1D задачи ====================
 
+
 def line_1d(model, x, lam, source_fn=0.0):
     """lam(T)*T'' + lam'(T)*(T')**2 + f(x) = 0"""
+
     def predict(x_val):
         return model(jnp.atleast_2d(x_val)).ravel()[0]
 
@@ -41,12 +43,15 @@ def line_1d(model, x, lam, source_fn=0.0):
     T_pred = model(x).ravel()
     lambda_vals, dlambda_dT = _lambda_and_derivative(T_pred, lam)
 
-    residual = lambda_vals * d2T_dx2 + dlambda_dT * dT_dx ** 2 + _source(x.ravel(), source_fn)
+    residual = (
+        lambda_vals * d2T_dx2 + dlambda_dT * dT_dx**2 + _source(x.ravel(), source_fn)
+    )
     return residual
 
 
 def cylinder_1d(model, x, lam, source_fn=0.0):
     """lam(T)*(T'' + T'/r) + lam'(T)*(T')**2 + f(r) = 0"""
+
     def predict(r_val):
         return model(jnp.atleast_2d(r_val)).ravel()[0]
 
@@ -63,12 +68,13 @@ def cylinder_1d(model, x, lam, source_fn=0.0):
     lambda_vals, dlambda_dT = _lambda_and_derivative(T_pred, lam)
 
     laplacian = d2T_dr2 + (1.0 / r_safe) * dT_dr
-    residual = lambda_vals * laplacian + dlambda_dT * dT_dr ** 2 + _source(r, source_fn)
+    residual = lambda_vals * laplacian + dlambda_dT * dT_dr**2 + _source(r, source_fn)
     return residual
 
 
 def sphere_1d(model, x, lam, source_fn=0.0):
     """lam(T)*(T'' + 2*T'/r) + lam'(T)*(T')**2 + f(r) = 0"""
+
     def predict(r_val):
         return model(jnp.atleast_2d(r_val)).ravel()[0]
 
@@ -85,13 +91,14 @@ def sphere_1d(model, x, lam, source_fn=0.0):
     lambda_vals, dlambda_dT = _lambda_and_derivative(T_pred, lam)
 
     laplacian = d2T_dr2 + (2.0 / r_safe) * dT_dr
-    residual = lambda_vals * laplacian + dlambda_dT * dT_dr ** 2 + _source(r, source_fn)
+    residual = lambda_vals * laplacian + dlambda_dT * dT_dr**2 + _source(r, source_fn)
     return residual
 
 
 # ==================== Универсальный оператор (2D, 3D и т.д.) ====================
 def laplace(model, x, lam, source_fn=0.0):
     """lam(T)*Laplacian(T) + lam'(T)*|grad T|**2 + f(x,y,z) = 0"""
+
     def predict(x_pts):
         return model(jnp.atleast_2d(x_pts)).ravel()[0]
 
@@ -104,6 +111,6 @@ def laplace(model, x, lam, source_fn=0.0):
     T_pred = model(x).ravel()
     lambda_vals, dlambda_dT = _lambda_and_derivative(T_pred, lam)
 
-    grad_sq = jnp.sum(grad_vals ** 2, axis=1)
+    grad_sq = jnp.sum(grad_vals**2, axis=1)
     residual = lambda_vals * laplacian + dlambda_dT * grad_sq + _source(x, source_fn)
     return residual

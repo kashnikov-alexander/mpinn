@@ -2,13 +2,12 @@
 
 import jax
 import jax.numpy as jnp
-import pytest
 from flax import nnx
 
 from mpinn.bc import dirichlet_bc, neumann_bc, robin_bc
 
-
 # ===== Helper models (nnx.Module) =====
+
 
 class LinearModel1D(nnx.Module):
     def __init__(self, a, b):
@@ -40,6 +39,7 @@ class QuadraticModel1D(nnx.Module):
 
 
 # ===== Tests =====
+
 
 class TestDirichletBC:
     """Test cases for Dirichlet boundary conditions."""
@@ -94,6 +94,7 @@ class TestDirichletBC:
         target = 1.0
         rngs = nnx.Rngs(seed_key)
         from mpinn.pinn_core import FCNet
+
         net = FCNet(
             din=1, dmid=10, dout=1, num_layers=2, activation=nnx.tanh, rngs=rngs
         )

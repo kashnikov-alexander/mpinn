@@ -188,10 +188,7 @@ from pde import line_1d
 
 # Создание функции потерь
 loss_fn = pinn.create_loss_fn(
-    pde_fn=line_1d,
-    bc_left=bc_left_fn,
-    bc_right=bc_right_fn,
-    phys=phys
+    pde_fn=line_1d, bc_left=bc_left_fn, bc_right=bc_right_fn, phys=phys
 )
 
 # В процессе обучения вычисляется:
@@ -211,6 +208,7 @@ from bc import dirichlet_bc
 from geom import Interval
 import optax
 
+
 # Физические параметры для разных геометрий
 class PhysicsLine:
     x0 = 0.0
@@ -218,17 +216,20 @@ class PhysicsLine:
     T0 = 300.0
     T1 = 400.0
 
+
 class PhysicsCylinder:
-    x0 = 0.1   # внутренний радиус
+    x0 = 0.1  # внутренний радиус
     x1 = 0.5  # внешний радиус
     T0 = 300.0
     T1 = 400.0
+
 
 class PhysicsSphere:
     x0 = 0.1
     x1 = 0.5
     T0 = 300.0
     T1 = 400.0
+
 
 # Выбор геометрии и соответствующего PDE
 geometry_type = "cylinder"  # "line", "cylinder", или "sphere"
@@ -258,7 +259,7 @@ history, time = pinn.fit(
     pde_fn=pde_fn,
     bc_fns=[bc_left, bc_right],
     phys=phys,
-    epochs=10000
+    epochs=10000,
 )
 ```
 
