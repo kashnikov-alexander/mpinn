@@ -327,7 +327,7 @@ def plot_3d_slices(
         ]
 
     n_planes = len(slice_planes)
-    fig, axes = plt.subplots(1, n_planes, figsize=(5 * n_planes, 4))
+    _fig, axes = plt.subplots(1, n_planes, figsize=(5 * n_planes, 4))
     if n_planes == 1:
         axes = [axes]
 
@@ -419,17 +419,17 @@ def plot_3d_isosurface(
             isomax=float(np.nanmax(T_3d)),
             surface_count=n_surfaces,
             colorscale="Jet",
-            caps=dict(x_show=False, y_show=False, z_show=False),
+            caps={"x_show": False, "y_show": False, "z_show": False},
         )
     )
     fig.update_layout(
         title=title,
-        scene=dict(
-            xaxis_title="x, м",
-            yaxis_title="y, м",
-            zaxis_title="z, м",
-            aspectmode="data",
-        ),
+        scene={
+            "xaxis_title": "x, м",
+            "yaxis_title": "y, м",
+            "zaxis_title": "z, м",
+            "aspectmode": "data",
+        },
         width=900,
         height=700,
     )
@@ -469,14 +469,14 @@ def plot_3d_surface_plotly(
 
     fig.update_layout(
         title=title,
-        scene=dict(
-            xaxis_title=labels.get("x", "X"),
-            yaxis_title=labels.get("y", "Y"),
-            zaxis_title=labels.get("z", "Z"),
-        ),
+        scene={
+            "xaxis_title": labels.get("x", "X"),
+            "yaxis_title": labels.get("y", "Y"),
+            "zaxis_title": labels.get("z", "Z"),
+        },
         width=800,
         height=600,
-        margin=dict(l=0, r=0, b=0, t=40),
+        margin={"l": 0, "r": 0, "b": 0, "t": 40},
     )
     fig.show()
     if save_path:
@@ -523,26 +523,26 @@ def plot_3d_surfaces(
                 opacity=1.0,  # <--- Полная непрозрачность
                 cmin=cmin,  # <--- Фиксируем минимум шкалы
                 cmax=cmax,  # <--- Фиксируем максимум шкалы
-                colorbar=dict(
-                    title="T, К",
-                    tickformat=".1f",  # <--- Округляем цифры до 1 знака после запятой
-                    thickness=20,
-                    len=0.8,
-                ),
+                colorbar={
+                    "title": "T, К",
+                    "tickformat": ".1f",  # <--- Округляем цифры до 1 знака после запятой
+                    "thickness": 20,
+                    "len": 0.8,
+                },
             )
         )
 
     fig.update_layout(
         title=title,
-        scene=dict(
-            xaxis_title="x, м",
-            yaxis_title="y, м",
-            zaxis_title="z, м",
-            aspectmode="data",
-        ),
+        scene={
+            "xaxis_title": "x, м",
+            "yaxis_title": "y, м",
+            "zaxis_title": "z, м",
+            "aspectmode": "data",
+        },
         width=1000,
         height=800,
-        margin=dict(l=0, r=0, b=0, t=40),
+        margin={"l": 0, "r": 0, "b": 0, "t": 40},
     )
 
     if save_path:

@@ -379,7 +379,7 @@ def fit_adaptive(
 
         if total_epochs % print_every == 0 or current_metric < target_metric:
             last_aux = block_h["loss_components"][-1]
-            L_pde, L_bc_total, L_dir, L_neu, L_rob, L_if_T, L_if_flux = last_aux
+            L_pde, _L_bc_total, L_dir, L_neu, L_rob, L_if_T, L_if_flux = last_aux
 
             print(
                 f"[epoch {total_epochs:6d}] "

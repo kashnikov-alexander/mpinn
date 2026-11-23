@@ -166,7 +166,7 @@ class SDFGeometry(GeometryBase):
 
             # 2. Для CSG: точка не внутри "соседа" (b) или вычитаемого
             if self.children:
-                a, b, op = self.children
+                _a, b, op = self.children
                 if op in ("difference", "union"):
                     mask = mask & (b.sdf_fn(pts) >= -1e-4)
 

@@ -212,7 +212,7 @@ def _plot_3d(
                 y=interior[:, 1],
                 z=interior[:, 2],
                 mode="markers",
-                marker=dict(size=3, color="blue", opacity=0.5),
+                marker={"size": 3, "color": "blue", "opacity": 0.5},
                 name="Внутренние точки",
             )
         )
@@ -225,7 +225,7 @@ def _plot_3d(
                 y=boundary_pts[:, 1],
                 z=boundary_pts[:, 2],
                 mode="markers",
-                marker=dict(size=5, color="green", opacity=0.7),
+                marker={"size": 5, "color": "green", "opacity": 0.7},
                 name="Граница",
             )
         )
@@ -237,20 +237,20 @@ def _plot_3d(
                 y=interface[:, 1],
                 z=interface[:, 2],
                 mode="markers",
-                marker=dict(size=5, color="red", opacity=0.7),
+                marker={"size": 5, "color": "red", "opacity": 0.7},
                 name="Интерфейс",
             )
         )
 
     fig.update_layout(
         title=title,
-        scene=dict(
-            xaxis_title="x", yaxis_title="y", zaxis_title="z", aspectmode="data"
-        ),
+        scene={
+            "xaxis_title": "x", "yaxis_title": "y", "zaxis_title": "z", "aspectmode": "data"
+        },
         width=1200,
         height=600,
         autosize=True,
-        margin=dict(l=0, r=0, b=0, t=40),
+        margin={"l": 0, "r": 0, "b": 0, "t": 40},
     )
 
     if save_path:
@@ -931,7 +931,7 @@ class HollowCylinder3D(GeometryBase):
 
         # ВАЖНО: разбиваем ключ!
         k1, k2 = jax.random.split(rng)
-        ez, er_ref, etheta_ref = self._cylinder_basis()
+        _ez, er_ref, etheta_ref = self._cylinder_basis()
 
         if name in ("outer", "inner"):
             theta = jax.random.uniform(k1, (n,), minval=0.0, maxval=2 * jnp.pi)
