@@ -765,8 +765,9 @@ class Annulus2D(GeometryBase):
     def __init__(
         self, center: tuple[float, float], R_outer: float, R_inner: float = 0.0
     ):
-        if R_outer <= 0 or R_inner <= 0 or R_inner >= R_outer:
+        if R_outer <= 0 or R_inner < 0 or R_inner >= R_outer:
             raise ValueError("Некорректные радиусы кольца.")
+        
         super().__init__(dim=2)
         self.center = jnp.array(center, dtype=jnp.float32)
         self.R_outer = float(R_outer)
@@ -826,10 +827,14 @@ class Annulus2D(GeometryBase):
         rng: jax.Array | None = None,
     ) -> dict[str, tuple[jax.Array, jax.Array]]:
         result = {}
-        for name, n in n_points_dict.items():
+        names = self.get_boundary_names()
+        keys = jax.random.split(rng, len(names)) if rng is not None else [None] * len(names)
+        for i, name in enumerate(names):
+            n = n_points_dict.get(name, 0)
             if n > 0:
-                result[name] = self._generate_boundary_points(name, n, method, rng)
+                result[name] = self._generate_boundary_points(name, n, method, keys[i])
         return result
+
 
     def is_inside(self, points: jax.Array) -> jax.Array:
         """Проверяет, лежат ли точки внутри кольца."""

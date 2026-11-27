@@ -388,6 +388,7 @@ def fit_adaptive(
             break
 
     history["epochs_trained"] = total_epochs
+    history["best_epoch"] = best_epoch
     return best_mpinn, best_states, history, time.perf_counter() - t0
 
 
@@ -751,3 +752,191 @@ def multistage_adaptive_training(
         print(f"Finished in {total_time:.1f}s, stages = {stage}")
 
     return best_mpinn, best_states, total_history, total_time
+
+
+def _slice_x_collocations(
+    x_collocations: tuple[jax.Array, ...],
+    batch_size: int,
+    key: jax.Array,
+) -> tuple[jax.Array, ...]:
+    new_x = []
+    for x_d in x_collocations:
+        key, subkey = jax.random.split(key)
+        n = x_d.shape[0]
+        bs = min(batch_size, n)
+        idx = jax.random.choice(subkey, n, shape=(bs,), replace=True)
+        new_x.append(x_d[idx])
+    return tuple(new_x)
+
+
+def _slice_bc_configs(
+    bc_configs: tuple[tuple[eqx.Module, ...], ...],
+    batch_size: int,
+    key: jax.Array,
+) -> tuple[tuple[eqx.Module, ...], ...]:
+    sliced = []
+    for bcs in bc_configs:
+        batch_bcs = []
+        for bc in bcs:
+            key, subkey = jax.random.split(key)
+            n = bc.points.shape[0]
+            size = min(batch_size, n)
+            idx = jax.random.choice(subkey, n, shape=(size,), replace=True)
+            batch_bc = eqx.tree_at(lambda b: b.points, bc, bc.points[idx])
+            if getattr(batch_bc, "normals", None) is not None:
+                batch_bc = eqx.tree_at(
+                    lambda b: b.normals, batch_bc, batch_bc.normals[idx]
+                )
+            batch_bcs.append(batch_bc)
+        sliced.append(tuple(batch_bcs))
+    return tuple(sliced)
+
+
+def fit_batch(
+    mpinn: MPINN,
+    txs: tuple,
+    opt_states: tuple,
+    x_collocations: tuple[jax.Array, ...],
+    bc_configs: tuple[tuple[eqx.Module, ...], ...],
+    epochs: int,
+    source_fns: tuple = (),
+    log_interval: int = 100,
+    print_log: bool = False,
+    step_offset: int = 0,
+    batch_size: int = 64,
+    seed: int = 0,
+) -> tuple[MPINN, tuple, dict, float]:
+    if epochs <= 0:
+        raise ValueError(f"epochs must be positive, got {epochs}")
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    if log_interval <= 0:
+        raise ValueError(f"log_interval must be positive, got {log_interval}")
+
+    t0 = time.perf_counter()
+    history = {"steps": [], "total_loss": [], "loss_components": []}
+    key = jax.random.PRNGKey(seed)
+
+    for step in range(epochs):
+        key, k_x, k_bc = jax.random.split(key, 3)
+        x_batch = _slice_x_collocations(x_collocations, batch_size, k_x)
+        bc_batch = _slice_bc_configs(bc_configs, batch_size, k_bc)
+
+        mpinn, opt_states, total, aux = train_step(
+            mpinn, txs, opt_states, x_batch, bc_batch, source_fns
+        )
+
+        if step % log_interval == 0 or step == epochs - 1:
+            aux_tuple = tuple(float(v) for v in aux)
+            history["steps"].append(step_offset + step)
+            history["total_loss"].append(float(total))
+            history["loss_components"].append(aux_tuple)
+            if print_log:
+                pde, bc, _, _, _, if_t, if_flux = aux_tuple
+                print(
+                    f"step {step_offset + step:6d} | "
+                    f"total={float(total):.3e}  "
+                    f"pde={pde:.3e}  bc={bc:.3e}  "
+                    f"if_T={if_t:.3e}  if_flux={if_flux:.3e}"
+                )
+
+    return mpinn, opt_states, history, time.perf_counter() - t0
+
+
+def fit_adaptive_batch(
+    mpinn: MPINN,
+    txs: tuple,
+    opt_states: tuple,
+    x_collocations: tuple[jax.Array, ...],
+    bc_configs: tuple[tuple[eqx.Module, ...], ...],
+    geometries: list,
+    x_test: jax.Array,
+    exact_fn: Callable,
+    target_metric: float = 1e-3,
+    metric_key: str = "rl2",
+    block_epochs: int = 500,
+    max_epochs: int = 1_000,
+    log_interval: int = 1,
+    print_every: int = 100,
+    patience: int = 100,
+    batch_size: int = 64,
+    seed: int = 0,
+) -> tuple[MPINN, tuple, dict, float]:
+    if block_epochs <= 0:
+        raise ValueError(f"block_epochs must be positive, got {block_epochs}")
+    if max_epochs <= 0:
+        raise ValueError(f"max_epochs must be positive, got {max_epochs}")
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    if log_interval <= 0:
+        raise ValueError(f"log_interval must be positive, got {log_interval}")
+    if print_every <= 0:
+        raise ValueError(f"print_every must be positive, got {print_every}")
+
+    t0 = time.perf_counter()
+    history = {"steps": [], "total_loss": [], "loss_components": []}
+    total_epochs = 0
+    best_metric = float("inf")
+    best_mpinn, best_states, best_epoch, no_improve = mpinn, opt_states, 0, 0
+    key = jax.random.PRNGKey(seed)
+
+    while total_epochs < max_epochs:
+        block = min(block_epochs, max_epochs - total_epochs)
+        key, subkey = jax.random.split(key)
+        block_seed = int(jax.random.randint(subkey, (), 0, jnp.iinfo(jnp.int32).max))
+
+        mpinn, opt_states, block_h, _ = fit_batch(
+            mpinn,
+            txs,
+            opt_states,
+            x_collocations,
+            bc_configs,
+            block,
+            source_fns=(),
+            log_interval=log_interval,
+            step_offset=total_epochs,
+            batch_size=batch_size,
+            seed=block_seed,
+        )
+
+        total_epochs += block
+        for name, values in block_h.items():
+            history.setdefault(name, []).extend(values)
+
+        metrics_dict, _, _ = evaluate(mpinn, geometries, x_test, exact_fn)
+        current_metric = float(metrics_dict[metric_key])
+
+        if current_metric < best_metric:
+            best_metric, best_mpinn, best_states = current_metric, mpinn, opt_states
+            best_epoch, no_improve = total_epochs, 0
+        else:
+            no_improve += 1
+
+        if total_epochs % print_every == 0 or current_metric < target_metric:
+            last_aux = block_h["loss_components"][-1]
+            pde, bc_total, dirichlet, neumann, robin, if_t, if_flux = last_aux
+            
+            print(
+                f"[epoch {total_epochs:6d}] "
+                f"{metric_key.upper()}={current_metric:.4e}  "
+                f"pde={pde:.3e}  bc={bc_total:.3e}  "
+                f"(dir={dirichlet:.3e} neu={neumann:.3e} rob={robin:.3e})  "
+                f"if_T={if_t:.3e} if_flux={if_flux:.3e}  "
+                f"(best={best_metric:.4e} @ {best_epoch}, "
+                f"patience={no_improve}/{patience})"
+            )
+
+        if current_metric < target_metric:
+            print(
+                f"Target {metric_key.upper()}={target_metric:.2e} "
+                f"reached at epoch {total_epochs}"
+            )
+            break
+        if no_improve >= patience:
+            print(f"Early stop: no progress for {patience} blocks")
+            break
+
+    history["epochs_trained"] = total_epochs
+    history["best_epoch"] = best_epoch
+    history["best_metric"] = best_metric
+    return best_mpinn, best_states, history, time.perf_counter() - t0

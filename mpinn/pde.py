@@ -99,18 +99,27 @@ def sphere_1d(model, x, lam, source_fn=0.0):
 def laplace(model, x, lam, source_fn=0.0):
     """lam(T)*Laplacian(T) + lam'(T)*|grad T|**2 + f(x,y,z) = 0"""
 
-    def predict(x_pts):
-        return model(jnp.atleast_2d(x_pts)).ravel()[0]
+    def predict(x_pt):
+        return model(x_pt[None]).ravel()[0]
 
-    def laplacian_pt(x_pt):
-        return jnp.trace(jax.hessian(predict)(x_pt))
+    def laplacian_and_grad_sq(x_pt):
+        grad_fn = jax.grad(predict)
+        grad_val = grad_fn(x_pt)
+        dim = x_pt.shape[0]
 
-    laplacian = jax.vmap(laplacian_pt)(x)
-    grad_vals = jax.vmap(jax.grad(predict))(x)
+        # Считаем только диагональные элементы гессиана (без смешанных производных)
+        def diag_hess(i):
+            e_i = jnp.zeros_like(x_pt).at[i].set(1.0)
+            return jax.jvp(grad_fn, (x_pt,), (e_i,))[1][i]
+
+        lap = jnp.sum(jax.vmap(diag_hess)(jnp.arange(dim)))
+        return lap, jnp.sum(grad_val**2)
+
+    laplacian, grad_sq = jax.vmap(laplacian_and_grad_sq)(x)
 
     T_pred = model(x).ravel()
     lambda_vals, dlambda_dT = _lambda_and_derivative(T_pred, lam)
 
-    grad_sq = jnp.sum(grad_vals**2, axis=1)
     residual = lambda_vals * laplacian + dlambda_dT * grad_sq + _source(x, source_fn)
     return residual
+
